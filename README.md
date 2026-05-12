@@ -39,3 +39,8 @@ Recomendadas en `.env`:
 - El panel admin y el bot se ejecutan en el mismo proceso Node.
 - Asegura que el servidor tenga permisos de escritura sobre `videos/`, `manuales/`, `imagenes/` y `data/`.
 - Para proveedores que exigen un puerto específico, usa `ADMIN_PORT` o `PORT`.
+
+## Notas de seguridad
+
+- El paquete `csurf` se usa para proteger formularios y peticiones del panel admin; está archivado y se recomienda evaluar su reemplazo en el futuro.
+- Se aplica un override de `cookie` en `package.json` para corregir una vulnerabilidad transitiva reportada por `npm audit`.

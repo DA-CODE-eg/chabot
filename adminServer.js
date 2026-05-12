@@ -56,21 +56,27 @@ function validateUrl(value) {
   }
 }
 
-function resolveResourcePath(filePath) {
-  if (!filePath) {
+function getSafeBasename(resourceKey, filePath) {
+  if (!VALID_RESOURCES.has(resourceKey) || !filePath) {
     return null;
   }
-  const resolvedPath = path.resolve(__dirname, filePath);
-  const allowedRoots = Object.values(UPLOAD_DIRS).map((dir) => path.resolve(dir));
-  const isAllowed = allowedRoots.some(
-    (root) => resolvedPath === root || resolvedPath.startsWith(`${root}${path.sep}`)
-  );
-  return isAllowed ? resolvedPath : null;
+  const baseName = path.basename(filePath);
+  const extension = path.extname(baseName).toLowerCase();
+  const allowed = ALLOWED_EXTENSIONS[resourceKey] || [];
+  const namePattern = new RegExp(`^[a-z0-9_-]+-${resourceKey}-\\d+\\.[a-z0-9]+$`, "i");
+  if (!namePattern.test(baseName) || !allowed.includes(extension)) {
+    return null;
+  }
+  return baseName;
 }
 
-function safeUnlink(filePath) {
-  const resolved = resolveResourcePath(filePath);
-  if (resolved && fs.existsSync(resolved)) {
+function safeUnlink(resourceKey, filePath) {
+  const baseName = getSafeBasename(resourceKey, filePath);
+  if (!baseName) {
+    return;
+  }
+  const resolved = path.join(UPLOAD_DIRS[resourceKey], baseName);
+  if (fs.existsSync(resolved)) {
     fs.unlinkSync(resolved);
   }
 }
@@ -95,10 +101,10 @@ async function startAdminServer() {
   ensureDataFile();
   ensureUploadDirs();
 
-  if (ADMIN_SESSION_SECRET === "change-this-secret" && process.env.NODE_ENV === "production") {
-    throw new Error("ADMIN_SESSION_SECRET debe configurarse en producción.");
-  }
-  if (ADMIN_SESSION_SECRET === "change-this-secret" && process.env.NODE_ENV !== "production") {
+  if (ADMIN_SESSION_SECRET === "change-this-secret") {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("ADMIN_SESSION_SECRET debe configurarse en producción.");
+    }
     console.warn("⚠️ ADMIN_SESSION_SECRET no configurado, usando valor por defecto.");
   }
 
@@ -234,7 +240,7 @@ async function startAdminServer() {
 
     const previous = updateResource(product, resource, { type: "url", url });
     if (previous.type === "file" && previous.path) {
-      safeUnlink(previous.path);
+      safeUnlink(resource, previous.path);
     }
 
     saveConfig(config);
@@ -255,7 +261,7 @@ async function startAdminServer() {
 
     const previous = updateResource(product, resource, { type: "none" });
     if (previous.type === "file" && previous.path) {
-      safeUnlink(previous.path);
+      safeUnlink(resource, previous.path);
     }
 
     saveConfig(config);
@@ -307,7 +313,7 @@ async function startAdminServer() {
       const config = loadConfig();
       const product = config.products.find((item) => item.id === id);
       if (!product) {
-        safeUnlink(req.file.path);
+        safeUnlink(resource, req.file.path);
         return res.status(404).json({ error: "Producto no encontrado" });
       }
 
@@ -320,7 +326,7 @@ async function startAdminServer() {
         path: relativePath
       });
       if (previous.type === "file" && previous.path && previous.path !== relativePath) {
-        safeUnlink(previous.path);
+        safeUnlink(resource, previous.path);
       }
 
       saveConfig(config);
