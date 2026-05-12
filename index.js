@@ -9,7 +9,9 @@ const { startAdminServer } = require("./adminServer");
 
 require('dotenv').config();
 ensureDataFile();
-startAdminServer();
+startAdminServer().catch((error) => {
+    console.error("❌ Error al iniciar panel admin:", error.message);
+});
 
 const client = new Client({
     authStrategy: new LocalAuth({
@@ -70,7 +72,7 @@ async function sendConfiguredResource(msg, product, resourceKey, options) {
     if (resource.type === "file" && resource.path) {
         const filePath = path.join(__dirname, resource.path);
         if (!fs.existsSync(filePath)) {
-            await msg.reply(`⚠️ ${options.unavailableMessage}`);
+            await msg.reply(`⚠️ ${options.missingFileMessage || options.unavailableMessage}`);
             return;
         }
         const media = MessageMedia.fromFilePath(filePath);
@@ -348,7 +350,8 @@ client.on('message', async msg => {
             await sendConfiguredResource(msg, product, "video", {
                 sendingMessage: "📹 Enviando video explicativo...",
                 urlMessage: "📹 Video explicativo disponible aquí:",
-                unavailableMessage: "El video de este producto no está disponible por ahora."
+                unavailableMessage: "El video de este producto no está disponible por ahora.",
+                missingFileMessage: "El archivo de video configurado no se encuentra en el servidor."
             });
             userState[user] = null;
             return;
@@ -360,7 +363,8 @@ client.on('message', async msg => {
             await sendConfiguredResource(msg, product, "manual", {
                 sendingMessage: `📄 Enviando ${manualName}...`,
                 urlMessage: `📄 ${manualName} disponible aquí:`,
-                unavailableMessage: "El manual de este producto no está disponible por ahora."
+                unavailableMessage: "El manual de este producto no está disponible por ahora.",
+                missingFileMessage: "El archivo del manual configurado no se encuentra en el servidor."
             });
             userState[user] = null;
             return;

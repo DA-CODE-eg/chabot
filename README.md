@@ -4,7 +4,7 @@ Chatbot de WhatsApp para Legal Segura con panel admin para gestionar videos, man
 
 ## Panel admin
 
-- URL: `http://localhost:<ADMIN_PORT>/admin`
+- URL: `http://localhost:3000/admin` (ajusta `ADMIN_PORT` si usas otro puerto)
 - Acceso con usuario y contraseña (sesión simple).
 - Permite cargar archivos locales o registrar URLs externas para videos y manuales.
 - Estado de cada recurso visible por producto.
@@ -32,6 +32,7 @@ Recomendadas en `.env`:
 - `ADMIN_SESSION_SECRET`: secreto para la sesión del panel.
 - `ADMIN_PORT`: puerto del panel (por defecto 3000).
 - `MAX_UPLOAD_MB`: tamaño máximo por archivo (por defecto 100MB).
+- `NODE_ENV`: usa `production` para activar cookies seguras.
 
 ## Despliegue
 

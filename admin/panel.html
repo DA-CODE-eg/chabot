@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content="{{csrfToken}}" />
     <title>Panel Admin - Recursos</title>
     <style>
       body {
@@ -102,6 +103,7 @@
     <header>
       <h1>Panel Admin - Recursos</h1>
       <form class="logout" method="post" action="/admin/logout">
+        <input type="hidden" name="_csrf" value="{{csrfToken}}" />
         <button type="submit">Cerrar sesión</button>
       </form>
     </header>
@@ -110,6 +112,7 @@
     <div id="products"></div>
 
     <script>
+      const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
       const messageBox = document.getElementById("message");
 
       function showMessage(text) {
@@ -215,8 +218,11 @@
         };
         const response = await fetch(`/admin/api/products/${id}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "x-csrf-token": csrfToken
+          },
           body: JSON.stringify(body)
         });
         if (response.ok) {
@@ -232,6 +238,9 @@
         const response = await fetch(`/admin/api/products/${id}/resource/${resource}/file`, {
           method: "POST",
           credentials: "same-origin",
+          headers: {
+            "x-csrf-token": csrfToken
+          },
           body: data
         });
         if (response.ok) {
@@ -250,7 +259,10 @@
         const url = form.url.value;
         const response = await fetch(`/admin/api/products/${id}/resource/${resource}/url`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-csrf-token": csrfToken
+          },
           credentials: "same-origin",
           body: JSON.stringify({ url })
         });
@@ -267,7 +279,10 @@
       async function clearResource(id, resource) {
         const response = await fetch(`/admin/api/products/${id}/resource/${resource}/clear`, {
           method: "POST",
-          credentials: "same-origin"
+          credentials: "same-origin",
+          headers: {
+            "x-csrf-token": csrfToken
+          }
         });
         if (response.ok) {
           showMessage("Recurso eliminado.");
