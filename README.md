@@ -27,9 +27,9 @@ Recomendadas en `.env`:
 - `SESSION_NAME`: nombre de sesión para WhatsApp Web.
 - `GROQ_API_KEY`: clave de Groq.
 - `ADMIN_USER`: usuario del panel admin.
-- `ADMIN_PASSWORD_HASH`: hash bcrypt de la contraseña del admin.
-- `ADMIN_PASSWORD`: alternativa temporal si no se define el hash.
-- `ADMIN_SESSION_SECRET`: secreto para la sesión del panel.
+- `ADMIN_PASSWORD_HASH`: hash bcrypt de la contraseña del admin (requerido en producción).
+- `ADMIN_PASSWORD`: alternativa solo para desarrollo si no se define el hash.
+- `ADMIN_SESSION_SECRET`: secreto para la sesión del panel (requerido en producción).
 - `ADMIN_PORT`: puerto del panel (por defecto 3000).
 - `MAX_UPLOAD_MB`: tamaño máximo por archivo (por defecto 100MB).
 - `NODE_ENV`: usa `production` para activar cookies seguras.

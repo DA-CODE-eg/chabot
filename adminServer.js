@@ -2,6 +2,7 @@ const express = require("express");
 const session = require("express-session");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const multer = require("multer");
 const rateLimit = require("express-rate-limit");
@@ -11,7 +12,7 @@ const { ensureDataFile, loadConfig, saveConfig } = require("./configStore");
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || null;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
-const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || "change-this-secret";
+const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || null;
 const ADMIN_PORT = Number(process.env.ADMIN_PORT || process.env.PORT || 3000);
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 100);
 
@@ -63,7 +64,7 @@ function getSafeBasename(resourceKey, filePath) {
   const baseName = path.basename(filePath);
   const extension = path.extname(baseName).toLowerCase();
   const allowed = ALLOWED_EXTENSIONS[resourceKey] || [];
-  const namePattern = new RegExp(`^[a-z0-9_-]+-${resourceKey}-\\d+\\.[a-z0-9]+$`, "i");
+  const namePattern = new RegExp(`^[a-z0-9_-]+-${resourceKey}-\\d+-[a-f0-9]+\\.[a-z0-9]+$`, "i");
   if (!namePattern.test(baseName) || !allowed.includes(extension)) {
     return null;
   }
@@ -101,18 +102,23 @@ async function startAdminServer() {
   ensureDataFile();
   ensureUploadDirs();
 
-  if (ADMIN_SESSION_SECRET === "change-this-secret") {
+  let sessionSecret = ADMIN_SESSION_SECRET;
+  if (!sessionSecret) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("ADMIN_SESSION_SECRET debe configurarse en producción.");
     }
-    console.warn("⚠️ ADMIN_SESSION_SECRET no configurado, usando valor por defecto.");
+    sessionSecret = crypto.randomBytes(32).toString("hex");
+    console.warn("⚠️ ADMIN_SESSION_SECRET no configurado, se generó uno temporal.");
   }
 
-  const resolvedPasswordHash =
-    ADMIN_PASSWORD_HASH ||
-    (ADMIN_PASSWORD
-      ? await bcrypt.hash(ADMIN_PASSWORD, 10)
-      : null);
+  let resolvedPasswordHash = ADMIN_PASSWORD_HASH;
+  if (!resolvedPasswordHash && ADMIN_PASSWORD) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("ADMIN_PASSWORD_HASH debe configurarse en producción.");
+    }
+    console.warn("⚠️ ADMIN_PASSWORD_HASH no configurado. Usando hash temporal de ADMIN_PASSWORD.");
+    resolvedPasswordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+  }
 
   if (!resolvedPasswordHash) {
     console.error("⚠️ Credenciales admin no configuradas. Configura ADMIN_PASSWORD_HASH.");
@@ -128,7 +134,7 @@ async function startAdminServer() {
   app.use(express.urlencoded({ extended: true }));
   app.use(
     session({
-      secret: ADMIN_SESSION_SECRET,
+      secret: sessionSecret,
       resave: false,
       saveUninitialized: false,
       cookie: {
@@ -283,7 +289,8 @@ async function startAdminServer() {
         if (!safeId) {
           return cb(new Error("ID inválido"));
         }
-        const safeName = `${safeId}-${req.params.resource}-${Date.now()}${extension}`;
+        const randomId = crypto.randomBytes(6).toString("hex");
+        const safeName = `${safeId}-${req.params.resource}-${Date.now()}-${randomId}${extension}`;
         cb(null, safeName);
       }
     }),

@@ -10,7 +10,7 @@ const { startAdminServer } = require("./adminServer");
 require('dotenv').config();
 ensureDataFile();
 startAdminServer().catch((error) => {
-    console.error("❌ Error al iniciar panel admin:", error.message);
+    console.error("❌ Error al iniciar panel admin:", error);
 });
 
 const client = new Client({
