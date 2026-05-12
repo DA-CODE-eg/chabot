@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content="{{csrfToken}}" />
+    <title>Panel Admin - Recursos</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f7f8fb;
+        margin: 0;
+        padding: 24px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .logout button {
+        background: #ef5350;
+        color: #fff;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .product {
+        background: #fff;
+        padding: 20px;
+        margin-bottom: 18px;
+        border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+      }
+      .product h2 {
+        margin-top: 0;
+      }
+      .resource {
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px solid #e7eaf0;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+      label {
+        font-size: 13px;
+        color: #5f6b7a;
+      }
+      input,
+      button,
+      select {
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #d5dbe3;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      button {
+        background: #1b5cff;
+        border: none;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .secondary {
+        background: #e0e7ff;
+        color: #1b5cff;
+      }
+      .status {
+        font-size: 13px;
+        margin-top: 6px;
+        color: #2d3748;
+        word-break: break-all;
+      }
+      .actions {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+      }
+      .actions button {
+        flex: 1;
+      }
+      .message {
+        background: #e7f5ff;
+        color: #1c7ed6;
+        padding: 10px 14px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Panel Admin - Recursos</h1>
+      <form class="logout" method="post" action="/admin/logout">
+        <input type="hidden" name="_csrf" value="{{csrfToken}}" />
+        <button type="submit">Cerrar sesión</button>
+      </form>
+    </header>
+
+    <div class="message" id="message"></div>
+    <div id="products"></div>
+
+    <script>
+      const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+      const messageBox = document.getElementById("message");
+
+      function showMessage(text) {
+        messageBox.textContent = text;
+        messageBox.style.display = "block";
+        setTimeout(() => {
+          messageBox.style.display = "none";
+        }, 3000);
+      }
+
+      function formatResource(resource) {
+        if (!resource || resource.type === "none") {
+          return "Sin configurar";
+        }
+        if (resource.type === "url") {
+          return `URL: ${resource.url}`;
+        }
+        return `Archivo local: ${resource.path}`;
+      }
+
+      function resourceForm(product, key, title) {
+        return `
+          <div class="resource">
+            <h3>${title}</h3>
+            <div class="status">Estado: ${formatResource(product[key])}</div>
+            <div class="row">
+              <div>
+                <label>Subir archivo</label>
+                <form onsubmit="uploadFile(event, '${product.id}', '${key}')">
+                  <input type="file" name="file" required />
+                  <div class="actions">
+                    <button type="submit">Subir</button>
+                  </div>
+                </form>
+              </div>
+              <div>
+                <label>Usar URL</label>
+                <form onsubmit="saveUrl(event, '${product.id}', '${key}')">
+                  <input type="url" name="url" placeholder="https://..." required />
+                  <div class="actions">
+                    <button type="submit">Guardar URL</button>
+                    <button type="button" class="secondary" onclick="clearResource('${product.id}', '${key}')">
+                      Limpiar
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderProducts(products) {
+        const container = document.getElementById("products");
+        container.innerHTML = "";
+        products.forEach((product) => {
+          const wrapper = document.createElement("div");
+          wrapper.className = "product";
+          wrapper.innerHTML = `
+            <h2>${product.label}</h2>
+            <form onsubmit="updateProduct(event, '${product.id}')">
+              <div class="row">
+                <div>
+                  <label>Nombre del producto</label>
+                  <input type="text" name="label" value="${product.label}" />
+                </div>
+                <div>
+                  <label>Nombre del manual</label>
+                  <input type="text" name="manualName" value="${product.manualName || ""}" />
+                </div>
+                <div>
+                  <label>&nbsp;</label>
+                  <button type="submit">Guardar nombres</button>
+                </div>
+              </div>
+            </form>
+            ${resourceForm(product, "video", "Video")}
+            ${resourceForm(product, "manual", "Manual PDF")}
+            ${resourceForm(product, "image", "Imágenes")}
+          `;
+          container.appendChild(wrapper);
+        });
+      }
+
+      async function loadProducts() {
+        const response = await fetch("/admin/api/products", {
+          credentials: "same-origin"
+        });
+        if (response.status === 401) {
+          window.location.href = "/admin/login";
+          return;
+        }
+        const data = await response.json();
+        renderProducts(data.products || []);
+      }
+
+      async function updateProduct(event, id) {
+        event.preventDefault();
+        const form = event.target;
+        const body = {
+          label: form.label.value,
+          manualName: form.manualName.value
+        };
+        const response = await fetch(`/admin/api/products/${id}`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "x-csrf-token": csrfToken
+          },
+          body: JSON.stringify(body)
+        });
+        if (response.ok) {
+          showMessage("Datos actualizados.");
+          loadProducts();
+        }
+      }
+
+      async function uploadFile(event, id, resource) {
+        event.preventDefault();
+        const form = event.target;
+        const data = new FormData(form);
+        const response = await fetch(`/admin/api/products/${id}/resource/${resource}/file`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "x-csrf-token": csrfToken
+          },
+          body: data
+        });
+        if (response.ok) {
+          showMessage("Archivo subido correctamente.");
+          loadProducts();
+          form.reset();
+        } else {
+          const error = await response.json().catch(() => ({}));
+          showMessage(error.error || "Error al subir archivo.");
+        }
+      }
+
+      async function saveUrl(event, id, resource) {
+        event.preventDefault();
+        const form = event.target;
+        const url = form.url.value;
+        const response = await fetch(`/admin/api/products/${id}/resource/${resource}/url`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-csrf-token": csrfToken
+          },
+          credentials: "same-origin",
+          body: JSON.stringify({ url })
+        });
+        if (response.ok) {
+          showMessage("URL guardada.");
+          loadProducts();
+          form.reset();
+        } else {
+          const error = await response.json().catch(() => ({}));
+          showMessage(error.error || "Error al guardar URL.");
+        }
+      }
+
+      async function clearResource(id, resource) {
+        const response = await fetch(`/admin/api/products/${id}/resource/${resource}/clear`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "x-csrf-token": csrfToken
+          }
+        });
+        if (response.ok) {
+          showMessage("Recurso eliminado.");
+          loadProducts();
+        }
+      }
+
+      loadProducts();
+    </script>
+  </body>
+</html>

@@ -2,8 +2,16 @@ console.log("Servidor Node funcionando");
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const Groq = require("groq-sdk");
+const path = require("path");
+const fs = require("fs");
+const { ensureDataFile, loadConfig } = require("./configStore");
+const { startAdminServer } = require("./adminServer");
 
 require('dotenv').config();
+ensureDataFile();
+startAdminServer().catch((error) => {
+    console.error("❌ Error al iniciar panel admin:", error);
+});
 
 const client = new Client({
     authStrategy: new LocalAuth({
@@ -33,6 +41,48 @@ const client = new Client({
 // Control de estado por usuario
 const userState = {};
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+const PRODUCT_OPTION_MAP = {
+    "1": "correo",
+    "2": "firma_electronica",
+    "3": "firma_digital",
+    "4": "tools",
+    "5": "firma_plus"
+};
+
+function getProductByOption(option) {
+    const config = loadConfig();
+    const productId = PRODUCT_OPTION_MAP[option];
+    return config.products.find((item) => item.id === productId);
+}
+
+async function sendConfiguredResource(msg, product, resourceKey, options) {
+    const resource = product?.[resourceKey];
+
+    if (!resource || resource.type === "none") {
+        await msg.reply(`⚠️ ${options.unavailableMessage}`);
+        return;
+    }
+
+    if (resource.type === "url" && resource.url) {
+        await msg.reply(`${options.urlMessage}\n${resource.url}`);
+        return;
+    }
+
+    if (resource.type === "file" && resource.path) {
+        const filePath = path.join(__dirname, resource.path);
+        if (!fs.existsSync(filePath)) {
+            await msg.reply(`⚠️ ${options.missingFileMessage || options.unavailableMessage}`);
+            return;
+        }
+        const media = MessageMedia.fromFilePath(filePath);
+        await msg.reply(options.sendingMessage);
+        await msg.reply(media);
+        return;
+    }
+
+    await msg.reply(`⚠️ ${options.unavailableMessage}`);
+}
 
 async function responderIA(textoUsuario) {
     const contexto = `
@@ -296,35 +346,26 @@ client.on('message', async msg => {
         const option = userState[user].option;
 
         if (text === "1") {
-            let videoPath = null;
-            if (option === "1") videoPath = "./videos/video_correo.mp4";
-            if (option === "2") videoPath = "./videos/video_firma_electronica.mp4";
-            if (option === "3") videoPath = "./videos/video_firma_digital.mp4";
-            if (option === "4") videoPath = "./videos/Tools.mp4";
-            if (option === "5") videoPath = "./videos/Firma_Plus.mp4";
-
-            if (videoPath) {
-                const media = MessageMedia.fromFilePath(videoPath);
-                await msg.reply("📹 Enviando video explicativo...");
-                await msg.reply(media);
-            }
+            const product = getProductByOption(option);
+            await sendConfiguredResource(msg, product, "video", {
+                sendingMessage: "📹 Enviando video explicativo...",
+                urlMessage: "📹 Video explicativo disponible aquí:",
+                unavailableMessage: "El video de este producto no está disponible por ahora.",
+                missingFileMessage: "El archivo de video configurado no se encuentra en el servidor."
+            });
             userState[user] = null;
             return;
         }
 
         if (text === "2") {
-            let manualPath = null;
-            if (option === "1") manualPath = "./manuales/manual_correo.pdf";
-            if (option === "2") manualPath = "./manuales/manual_firma_electronica.pdf";
-            if (option === "3") manualPath = "./manuales/manual_firma_digital.pdf";
-            if (option === "4") manualPath = "./manuales/manual_Tools.pdf";
-            if (option === "5") manualPath = "./manuales/Firma_Plus.pdf";
-
-            if (manualPath) {
-                const manual = MessageMedia.fromFilePath(manualPath);
-                await msg.reply("📄 Enviando manual del producto...");
-                await msg.reply(manual);
-            }
+            const product = getProductByOption(option);
+            const manualName = product?.manualName || "Manual del producto";
+            await sendConfiguredResource(msg, product, "manual", {
+                sendingMessage: `📄 Enviando ${manualName}...`,
+                urlMessage: `📄 ${manualName} disponible aquí:`,
+                unavailableMessage: "El manual de este producto no está disponible por ahora.",
+                missingFileMessage: "El archivo del manual configurado no se encuentra en el servidor."
+            });
             userState[user] = null;
             return;
         }
