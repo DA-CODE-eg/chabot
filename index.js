@@ -11,12 +11,13 @@ function getMedia() {
 }
 
 const express = require('express');
+const cookieParser = require('cookie-parser');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Montar admin
-const adminRouter = require('./admin');
-app.use('/admin', adminRouter);
+app.use(cookieParser());
+app.use('/admin', require('./admin'));
+app.use(express.static(__dirname));
 
 app.listen(PORT, () => console.log(`🌐 Servidor web corriendo en puerto ${PORT}`));
 

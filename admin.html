@@ -10,6 +10,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 header {
   background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%);
   color: #fff; padding: 18px 32px;
+  position: relative;
 }
 header h1 { font-size: 1.3rem; font-weight: 700; }
 header p  { font-size: .8rem; opacity: .7; margin-top: 2px; }
@@ -71,6 +72,7 @@ header p  { font-size: .8rem; opacity: .7; margin-top: 2px; }
 .btn-blue  { background: #3182ce; color: #fff; }
 .btn-green { background: #38a169; color: #fff; }
 .btn-red   { background: #e53e3e; color: #fff; padding: 4px 10px; font-size: .75rem; }
+.btn-gray  { background: #cbd5e0; color: #2d3748; }
 .btn:hover { opacity: .85; }
 .nueva-cat { background: #fff; border: 2px dashed #bee3f8; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
 .nueva-cat h3 { font-size: .9rem; color: #2b6cb0; margin-bottom: 10px; }
@@ -95,6 +97,7 @@ header p  { font-size: .8rem; opacity: .7; margin-top: 2px; }
 <header>
   <h1>⚙️ Legal Segura — Panel Admin</h1>
   <p>Gestión de videos y manuales por producto</p>
+  <button class="btn btn-gray" onclick="logoutPanel()" style="position:absolute;right:18px;top:18px">Cerrar sesión</button>
 </header>
 
 <div class="container">
@@ -107,6 +110,16 @@ header p  { font-size: .8rem; opacity: .7; margin-top: 2px; }
       <button onclick="limpiarBusqueda()" id="btn-limpiar" style="display:none;background:none;border:none;cursor:pointer;font-size:1.1rem;color:#a0aec0">✕</button>
     </div>
     <div class="buscador-info" id="buscador-info"></div>
+  </div>
+
+  <!-- WhatsApp Linking Section -->
+  <div class="card" id="wa-vinculacion">
+    <div class="card-header">
+      <h3>🔗 Vinculación WhatsApp</h3>
+    </div>
+    <div class="card-body" id="wa-status-box">
+      <p style="color:#718096">Cargando estado...</p>
+    </div>
   </div>
 
   <!-- Nueva categoría -->
@@ -357,7 +370,58 @@ function toast(msg) {
   t._t = setTimeout(() => t.style.display = 'none', 3500);
 }
 
+async function cargarWaStatus() {
+  const box = document.getElementById('wa-status-box');
+  box.innerHTML = '<p style="color:#718096">Cargando estado...</p>';
+  try {
+    const status = await fetch('/api/wa/status').then(x => x.json());
+    if (status.ready) {
+      box.innerHTML = `
+        <div style="color:#38a169;font-size:1.05rem"><b>✅ Vinculado</b></div>
+        <div style="margin:10px 0">Número conectado:<br>
+          <span style="background:#eef6ec;color:#276749;padding:3px 7px;border-radius:6px">${status.number}</span>
+        </div>
+        <button class="btn btn-red" onclick="logoutWa()">Desvincular / cerrar sesión</button>
+        <div style="font-size:.83rem;color:#888;margin-top:6px">
+          Puedes cerrar sesión y vincular con otro número en cualquier momento.
+        </div>
+      `;
+    } else if (status.qr) {
+      box.innerHTML = `
+        <div style="color:#3182ce;font-size:1.02rem"><b>⏳ Esperando escaneo...</b></div>
+        <div id="wa-qr" style="margin:18px 0 10px 0;display:flex;justify-content:center"></div>
+        <div style="font-size:.9rem;color:#999">Abre WhatsApp en tu teléfono > Dispositivos vinculados > Vincular dispositivo</div>
+      `;
+      // Cargar QR visual
+      const qrSvg = await fetch('/api/wa/qr').then(x => x.text());
+      document.getElementById('wa-qr').innerHTML = qrSvg;
+      setTimeout(cargarWaStatus, 4000);
+    } else {
+      box.innerHTML = `
+        <div style="color:#fbbe25;font-size:1rem"><b>Sin sesión activa</b></div>
+        <button class="btn btn-blue" onclick="cargarWaStatus()">Intentar reconectar / buscar QR</button>
+        <div style="font-size:.82rem;color:#888">Si el bot no responde, intenta recargar y verifica el servidor.</div>
+      `;
+      setTimeout(cargarWaStatus, 4000);
+    }
+  } catch {
+    box.innerHTML = '<div style="color:#e53e3e">No se pudo obtener estado. ¿El bot está caído?</div>';
+  }
+}
+
+async function logoutWa() {
+  if (!confirm("¿Cerrar la sesión de WhatsApp? El bot pedirá QR y podrás vincular otro número.")) return;
+  await fetch('/api/wa/logout', { method:'POST' });
+  cargarWaStatus();
+}
+
+async function logoutPanel() {
+  await fetch('/admin/api/logout', {method:'POST'});
+  window.location = '/login.html';
+}
+
 cargar();
+cargarWaStatus();
 </script>
 </body>
 </html>

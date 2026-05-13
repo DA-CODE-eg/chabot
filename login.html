@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Legal Segura — Login</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { background: #ecf2ff; font-family: 'Segoe UI',sans-serif; }
+    .login-box {
+      max-width: 350px; margin: 65px auto; background: #fff; padding: 30px 28px;
+      border-radius: 13px; box-shadow: 0 7px 25px rgba(49,130,206,0.13); text-align:center;
+    }
+    .login-box h1 { color: #2b6cb0; font-size: 1.1rem; margin-bottom: 17px; margin-top: 0;}
+    label { text-align:left; display:block; margin:7px 0 3px 2px; color:#355; font-size:.96rem;}
+    input[type=text], input[type=password] {
+      width:100%;padding:8px 12px;border:1px solid #bcd;border-radius:8px;margin-bottom:12px;font-size:.98rem;
+    }
+    button {width:100%;background:#3182ce;color:#fff;padding:10px 0;border:none;border-radius:8px;
+      font-size:1rem;font-weight:600;margin-top:5px;cursor:pointer;}
+    button:active { opacity:.85;}
+    .msg-error { background:#fee2e2; color:#da2d2d; padding:9px 0; border-radius:7px; margin-bottom:12px;}
+    .brand {margin-bottom:12px;}
+  </style>
+</head>
+<body>
+  <form class="login-box" id="lgf" autocomplete="off">
+    <div class="brand"><img src="https://i.imgur.com/R0yZSvn.png" alt="Legal Segura" style="height:40px;"></div>
+    <h1>Panel Admin</h1>
+    <div id="err" class="msg-error" style="display:none"></div>
+    <label>Usuario</label>
+    <input id="user" maxlength="32" required>
+    <label>Contraseña</label>
+    <input id="pass" type="password" maxlength="32" required>
+    <button>Entrar</button>
+  </form>
+  <script>
+    document.getElementById('lgf').onsubmit = async e => {
+      e.preventDefault();
+      const user = user.value; const pass = pass.value;
+      const r = await fetch('/admin/api/login', {
+        method: 'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({user,pass})
+      });
+      if (r.ok) { location.href = '/admin'; }
+      else {
+        document.getElementById('err').style.display='';
+        document.getElementById('err').textContent = "Usuario o contraseña incorrecta";
+        setTimeout(()=>{document.getElementById('err').style.display='none'},4200);
+      }
+    };
+  </script>
+</body>
+</html>
