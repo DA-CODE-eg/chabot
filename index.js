@@ -10,6 +10,16 @@ function getMedia() {
     return JSON.parse(require('fs').readFileSync('./media-config.json', 'utf8'));
 }
 
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Montar admin
+const adminRouter = require('./admin');
+app.use('/admin', adminRouter);
+
+app.listen(PORT, () => console.log(`🌐 Servidor web corriendo en puerto ${PORT}`));
+
 const client = new Client({
     authStrategy: new LocalAuth({
         clientId: process.env.SESSION_NAME
