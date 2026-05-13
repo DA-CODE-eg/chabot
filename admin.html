@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Legal Segura – Panel Admin</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c; }
+header {
+  background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%);
+  color: #fff; padding: 18px 32px;
+}
+header h1 { font-size: 1.3rem; font-weight: 700; }
+header p  { font-size: .8rem; opacity: .7; margin-top: 2px; }
+.container { max-width: 1000px; margin: 28px auto; padding: 0 16px; }
+
+/* ── Buscador ── */
+.buscador-wrap {
+  position: sticky; top: 0; z-index: 100;
+  background: #f0f4f8; padding: 14px 0 10px;
+  margin-bottom: 6px;
+}
+.buscador-inner {
+  display: flex; align-items: center; gap: 10px;
+  background: #fff; border: 2px solid #bee3f8; border-radius: 12px;
+  padding: 10px 16px; box-shadow: 0 2px 8px rgba(49,130,206,.1);
+  transition: border-color .2s;
+}
+.buscador-inner:focus-within { border-color: #3182ce; }
+.buscador-inner span { font-size: 1.1rem; }
+.buscador-inner input {
+  flex: 1; border: none; outline: none;
+  font-size: .95rem; background: transparent; color: #1a202c;
+}
+.buscador-info { font-size: .78rem; color: #718096; margin-top: 6px; padding-left: 4px; }
+.sin-resultados {
+  text-align: center; padding: 48px 20px; color: #a0aec0;
+  background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+.sin-resultados span { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+.resaltado { background: #fefcbf; border-radius: 3px; padding: 0 2px; }
+
+.card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); margin-bottom: 20px; overflow: hidden; }
+.card-header {
+  background: #ebf4ff; padding: 12px 20px;
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid #bee3f8;
+}
+.card-header h3 { font-size: .95rem; font-weight: 700; color: #2b6cb0; }
+.card-body { padding: 20px; }
+.seccion { margin-bottom: 22px; }
+.seccion h4 { font-size: .85rem; font-weight: 700; color: #4a5568; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+.item-lista {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 8px 12px; margin-bottom: 6px; font-size: .83rem;
+}
+.item-lista span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.formulario { background: #f7fafc; border: 1px dashed #cbd5e0; border-radius: 8px; padding: 14px; margin-top: 8px; }
+.formulario label { font-size: .78rem; font-weight: 600; color: #718096; display: block; margin-bottom: 4px; margin-top: 10px; }
+.formulario label:first-child { margin-top: 0; }
+.formulario input[type=text], .formulario input[type=file] {
+  width: 100%; padding: 7px 10px; border: 1px solid #cbd5e0;
+  border-radius: 6px; font-size: .83rem; background: #fff;
+}
+.tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.tab { padding: 5px 14px; border-radius: 20px; font-size: .78rem; font-weight: 600; cursor: pointer; border: 1px solid #cbd5e0; background: #fff; color: #4a5568; }
+.tab.active { background: #3182ce; color: #fff; border-color: #3182ce; }
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border: none; border-radius: 7px; font-size: .82rem; font-weight: 600; cursor: pointer; }
+.btn-blue  { background: #3182ce; color: #fff; }
+.btn-green { background: #38a169; color: #fff; }
+.btn-red   { background: #e53e3e; color: #fff; padding: 4px 10px; font-size: .75rem; }
+.btn:hover { opacity: .85; }
+.nueva-cat { background: #fff; border: 2px dashed #bee3f8; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+.nueva-cat h3 { font-size: .9rem; color: #2b6cb0; margin-bottom: 10px; }
+.row { display: flex; gap: 10px; align-items: flex-end; }
+.row input { flex: 1; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 7px; font-size: .85rem; }
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: #2d3748; color: #fff; padding: 12px 22px;
+  border-radius: 9px; font-size: .88rem; display: none; z-index: 999;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+@media(max-width:600px) {
+  header { padding: 14px 16px; }
+  .container { padding: 0 10px; }
+  .card-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚙️ Legal Segura — Panel Admin</h1>
+  <p>Gestión de videos y manuales por producto</p>
+</header>
+
+<div class="container">
+
+  <!-- Buscador sticky -->
+  <div class="buscador-wrap">
+    <div class="buscador-inner">
+      <span>🔍</span>
+      <input type="text" id="buscador" placeholder="Buscar producto, video o manual..." oninput="filtrar(this.value)" autocomplete="off">
+      <button onclick="limpiarBusqueda()" id="btn-limpiar" style="display:none;background:none;border:none;cursor:pointer;font-size:1.1rem;color:#a0aec0">✕</button>
+    </div>
+    <div class="buscador-info" id="buscador-info"></div>
+  </div>
+
+  <!-- Nueva categoría -->
+  <div class="nueva-cat" id="nueva-cat-box">
+    <h3>➕ Agregar nueva categoría de producto</h3>
+    <div class="row">
+      <input type="text" id="nuevo-nombre" placeholder="Ej: Firma Digital Avanzada">
+      <button class="btn btn-blue" onclick="nuevaCategoria()">Crear categoría</button>
+    </div>
+  </div>
+
+  <div id="productos-container"><p style="color:#718096">Cargando...</p></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let config = {};
+let terminoBusqueda = '';
+
+async function cargar() {
+  const res = await fetch('/api/config');
+  config = await res.json();
+  filtrar(terminoBusqueda);
+}
+
+function resaltar(texto, termino) {
+  if (!termino) return texto;
+  const re = new RegExp(`(${termino.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+  return texto.replace(re, '<mark class="resaltado">$1</mark>');
+}
+
+function filtrar(termino) {
+  terminoBusqueda = termino.toLowerCase().trim();
+  const cont = document.getElementById('productos-container');
+  const info = document.getElementById('buscador-info');
+  const btnX = document.getElementById('btn-limpiar');
+  const nuevaCat = document.getElementById('nueva-cat-box');
+
+  btnX.style.display = terminoBusqueda ? 'block' : 'none';
+  nuevaCat.style.display = terminoBusqueda ? 'none' : 'block';
+
+  const productos = Object.entries(config.productos || {});
+  if (!productos.length) {
+    cont.innerHTML = '<p style="color:#718096">No hay productos aún.</p>';
+    info.textContent = '';
+    return;
+  }
+
+  // Filtrar: busca en nombre del producto, nombres de videos y manuales
+  const filtrados = terminoBusqueda
+    ? productos.filter(([id, p]) => {
+        const enNombre   = p.nombre.toLowerCase().includes(terminoBusqueda);
+        const enVideos   = (p.videos   || []).some(v => v.nombre.toLowerCase().includes(terminoBusqueda));
+        const enManuales = (p.manuales || []).some(m => m.nombre.toLowerCase().includes(terminoBusqueda));
+        return enNombre || enVideos || enManuales;
+      })
+    : productos;
+
+  if (!filtrados.length) {
+    cont.innerHTML = `
+      <div class="sin-resultados">
+        <span>🔎</span>
+        <strong>Sin resultados para "${termino}"</strong>
+        <p style="margin-top:6px;font-size:.85rem">Intenta con otro nombre de producto, video o manual</p>
+      </div>`;
+    info.textContent = '';
+    return;
+  }
+
+  info.textContent = terminoBusqueda
+    ? `${filtrados.length} de ${productos.length} producto(s) encontrado(s)`
+    : `${productos.length} producto(s) en total`;
+
+  cont.innerHTML = filtrados.map(([id, p]) => tarjeta(id, p, terminoBusqueda)).join('');
+}
+
+function limpiarBusqueda() {
+  document.getElementById('buscador').value = '';
+  filtrar('');
+}
+
+function tarjeta(id, p, termino) {
+  const nombreResaltado = resaltar(p.nombre, termino);
+
+  const videos = (p.videos || []).map((v, i) => {
+    const nomRes = resaltar(v.nombre, termino);
+    return `<div class="item-lista">
+      <span title="${v.ruta}">🎬 ${nomRes}</span>
+      <button class="btn btn-red" onclick="eliminarVideo(${id},${i})">🗑</button>
+    </div>`;
+  }).join('') || '<p style="font-size:.8rem;color:#a0aec0">Sin videos aún</p>';
+
+  const manuales = (p.manuales || []).map((m, i) => {
+    const nomRes = resaltar(m.nombre, termino);
+    return `<div class="item-lista">
+      <span title="${m.ruta}">📄 ${nomRes}</span>
+      <button class="btn btn-red" onclick="eliminarManual(${id},${i})">🗑</button>
+    </div>`;
+  }).join('') || '<p style="font-size:.8rem;color:#a0aec0">Sin manuales aún</p>';
+
+  return `
+  <div class="card">
+    <div class="card-header">
+      <h3>📦 ${nombreResaltado}</h3>
+      <button class="btn btn-red" onclick="eliminarProducto(${id})">🗑 Eliminar categoría</button>
+    </div>
+    <div class="card-body">
+
+      <div class="seccion">
+        <h4>🎬 Videos (${(p.videos||[]).length})</h4>
+        ${videos}
+        <div class="formulario">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab(this,'tab-vurl-${id}','tab-vfile-${id}')">Pegar URL</div>
+            <div class="tab"       onclick="switchTab(this,'tab-vfile-${id}','tab-vurl-${id}')">Subir archivo</div>
+          </div>
+          <div id="tab-vurl-${id}">
+            <label>Nombre del video</label>
+            <input type="text" id="vnombre-url-${id}" placeholder="Ej: Tutorial paso a paso">
+            <label>URL del video</label>
+            <input type="text" id="vurl-${id}" placeholder="https://youtube.com/...">
+            <button class="btn btn-blue" style="margin-top:10px" onclick="agregarVideoURL(${id})">+ Agregar video</button>
+          </div>
+          <div id="tab-vfile-${id}" style="display:none">
+            <label>Nombre del video</label>
+            <input type="text" id="vnombre-file-${id}" placeholder="Ej: Tutorial paso a paso">
+            <label>Archivo de video</label>
+            <input type="file" id="vfile-${id}" accept="video/*">
+            <button class="btn btn-green" style="margin-top:10px" onclick="subirVideo(${id})">⬆ Subir video</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="seccion">
+        <h4>📄 Manuales PDF (${(p.manuales||[]).length})</h4>
+        ${manuales}
+        <div class="formulario">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab(this,'tab-murl-${id}','tab-mfile-${id}')">Pegar URL</div>
+            <div class="tab"       onclick="switchTab(this,'tab-mfile-${id}','tab-murl-${id}')">Subir archivo</div>
+          </div>
+          <div id="tab-murl-${id}">
+            <label>Nombre del manual</label>
+            <input type="text" id="mnombre-url-${id}" placeholder="Ej: Manual de instalación">
+            <label>URL del PDF</label>
+            <input type="text" id="murl-${id}" placeholder="https://drive.google.com/...">
+            <button class="btn btn-blue" style="margin-top:10px" onclick="agregarManualURL(${id})">+ Agregar manual</button>
+          </div>
+          <div id="tab-mfile-${id}" style="display:none">
+            <label>Nombre del manual</label>
+            <input type="text" id="mnombre-file-${id}" placeholder="Ej: Manual de instalación">
+            <label>Archivo PDF</label>
+            <input type="file" id="mfile-${id}" accept=".pdf">
+            <button class="btn btn-green" style="margin-top:10px" onclick="subirManual(${id})">⬆ Subir manual</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>`;
+}
+
+function switchTab(el, mostrar, ocultar) {
+  document.getElementById(mostrar).style.display = 'block';
+  document.getElementById(ocultar).style.display = 'none';
+  el.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+async function nuevaCategoria() {
+  const nombre = document.getElementById('nuevo-nombre').value.trim();
+  if (!nombre) return toast('⚠️ Escribe un nombre');
+  const r = await post('/api/producto/nuevo', { nombre });
+  toast(r.msg); if (r.ok) { document.getElementById('nuevo-nombre').value = ''; cargar(); }
+}
+
+async function eliminarProducto(id) {
+  if (!confirm('¿Eliminar esta categoría completa?')) return;
+  const r = await del(`/api/producto/${id}`);
+  toast(r.msg); if (r.ok) cargar();
+}
+
+async function agregarVideoURL(id) {
+  const nombre = document.getElementById(`vnombre-url-${id}`).value.trim();
+  const url    = document.getElementById(`vurl-${id}`).value.trim();
+  if (!nombre || !url) return toast('⚠️ Completa nombre y URL');
+  const r = await post('/api/video/url', { productoId: String(id), nombre, url });
+  toast(r.msg); if (r.ok) cargar();
+}
+
+async function subirVideo(id) {
+  const nombre = document.getElementById(`vnombre-file-${id}`).value.trim();
+  const file   = document.getElementById(`vfile-${id}`).files[0];
+  if (!file) return toast('⚠️ Selecciona un archivo');
+  const fd = new FormData();
+  fd.append('archivo', file);
+  fd.append('productoId', String(id));
+  fd.append('nombre', nombre || file.name);
+  toast('⏳ Subiendo...');
+  const r = await fetch('/api/video/subir', { method:'POST', body:fd }).then(x => x.json());
+  toast(r.msg); if (r.ok) cargar();
+}
+
+async function eliminarVideo(id, idx) {
+  if (!confirm('¿Eliminar este video?')) return;
+  const r = await del(`/api/video/${id}/${idx}`);
+  toast(r.msg); if (r.ok) cargar();
+}
+
+async function agregarManualURL(id) {
+  const nombre = document.getElementById(`mnombre-url-${id}`).value.trim();
+  const url    = document.getElementById(`murl-${id}`).value.trim();
+  if (!nombre || !url) return toast('⚠️ Completa nombre y URL');
+  const r = await post('/api/manual/url', { productoId: String(id), nombre, url });
+  toast(r.msg); if (r.ok) cargar();
+}
+
+async function subirManual(id) {
+  const nombre = document.getElementById(`mnombre-file-${id}`).value.trim();
+  const file   = document.getElementById(`mfile-${id}`).files[0];
+  if (!file) return toast('⚠️ Selecciona un archivo');
+  const fd = new FormData();
+  fd.append('archivo', file);
+  fd.append('productoId', String(id));
+  fd.append('nombre', nombre || file.name);
+  toast('⏳ Subiendo...');
+  const r = await fetch('/api/manual/subir', { method:'POST', body:fd }).then(x => x.json());
+  toast(r.msg); if (r.ok) cargar();
+}
+
+async function eliminarManual(id, idx) {
+  if (!confirm('¿Eliminar este manual?')) return;
+  const r = await del(`/api/manual/${id}/${idx}`);
+  toast(r.msg); if (r.ok) cargar();
+}
+
+async function post(url, data) {
+  return fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(x => x.json());
+}
+async function del(url) {
+  return fetch(url, { method:'DELETE' }).then(x => x.json());
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.style.display = 'none', 3500);
+}
+
+cargar();
+</script>
+</body>
+</html>

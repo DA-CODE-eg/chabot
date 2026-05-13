@@ -1,0 +1,49 @@
+{
+  "productos": {
+    "1": {
+      "nombre": "Correo Electrónico Certificado",
+      "videos": [
+        { "nombre": "Tutorial básico", "ruta": "./videos/video_correo.mp4" }
+      ],
+      "manuales": [
+        { "nombre": "Manual de usuario", "ruta": "./manuales/manual_correo.pdf" }
+      ]
+    },
+    "2": {
+      "nombre": "Firma Electrónica Certificada",
+      "videos": [
+        { "nombre": "Tutorial básico", "ruta": "./videos/video_firma_electronica.mp4" }
+      ],
+      "manuales": [
+        { "nombre": "Manual de usuario", "ruta": "./manuales/manual_firma_electronica.pdf" }
+      ]
+    },
+    "3": {
+      "nombre": "Firma Digital",
+      "videos": [
+        { "nombre": "Tutorial básico", "ruta": "./videos/video_firma_digital.mp4" }
+      ],
+      "manuales": [
+        { "nombre": "Manual de usuario", "ruta": "./manuales/manual_firma_digital.pdf" }
+      ]
+    },
+    "4": {
+      "nombre": "App Tools",
+      "videos": [
+        { "nombre": "Tutorial básico", "ruta": "./videos/Tools.mp4" }
+      ],
+      "manuales": [
+        { "nombre": "Manual de usuario", "ruta": "./manuales/manual_Tools.pdf" }
+      ]
+    },
+    "5": {
+      "nombre": "Firma Plus",
+      "videos": [
+        { "nombre": "Tutorial básico", "ruta": "./videos/Firma_Plus.mp4" }
+      ],
+      "manuales": [
+        { "nombre": "Manual de usuario", "ruta": "./manuales/Firma_Plus.pdf" }
+      ]
+    }
+  }
+}

@@ -5,6 +5,11 @@ const Groq = require("groq-sdk");
 
 require('dotenv').config();
 
+// Leer config de medios dinámicamente
+function getMedia() {
+    return JSON.parse(require('fs').readFileSync('./media-config.json', 'utf8'));
+}
+
 const client = new Client({
     authStrategy: new LocalAuth({
         clientId: process.env.SESSION_NAME
@@ -296,12 +301,8 @@ client.on('message', async msg => {
         const option = userState[user].option;
 
         if (text === "1") {
-            let videoPath = null;
-            if (option === "1") videoPath = "./videos/video_correo.mp4";
-            if (option === "2") videoPath = "./videos/video_firma_electronica.mp4";
-            if (option === "3") videoPath = "./videos/video_firma_digital.mp4";
-            if (option === "4") videoPath = "./videos/Tools.mp4";
-            if (option === "5") videoPath = "./videos/Firma_Plus.mp4";
+            const cfg = getMedia();
+            let videoPath = cfg.productos[option]?.video || null;
 
             if (videoPath) {
                 const media = MessageMedia.fromFilePath(videoPath);
@@ -313,12 +314,8 @@ client.on('message', async msg => {
         }
 
         if (text === "2") {
-            let manualPath = null;
-            if (option === "1") manualPath = "./manuales/manual_correo.pdf";
-            if (option === "2") manualPath = "./manuales/manual_firma_electronica.pdf";
-            if (option === "3") manualPath = "./manuales/manual_firma_digital.pdf";
-            if (option === "4") manualPath = "./manuales/manual_Tools.pdf";
-            if (option === "5") manualPath = "./manuales/Firma_Plus.pdf";
+            const cfg = getMedia();
+            let manualPath = cfg.productos[option]?.manual || null;
 
             if (manualPath) {
                 const manual = MessageMedia.fromFilePath(manualPath);
