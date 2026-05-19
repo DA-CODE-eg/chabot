@@ -1,8 +1,19 @@
 console.log("Servidor Node funcionando");
 
-// ── Limpiar locks de Chrome ANTES de todo ──
+// ── Matar Chrome y limpiar locks ANTES de todo ──
 const fs_init = require('fs');
 const path_init = require('path');
+const { execSync } = require('child_process');
+
+// 1. Matar procesos Chrome que quedaron vivos
+try {
+    execSync('pkill -9 -f chrome 2>/dev/null; pkill -9 -f chromium 2>/dev/null; sleep 1', { shell: true });
+    console.log('✅ Procesos Chrome terminados');
+} catch(e) {
+    console.log('ℹ️ No había procesos Chrome corriendo');
+}
+
+// 2. Borrar lock files
 const authDir = path_init.join(__dirname, '.wwebjs_auth');
 try {
     if (fs_init.existsSync(authDir)) {
@@ -52,7 +63,8 @@ app.listen(PORT, () => console.log(`🌐 Servidor web corriendo en puerto ${PORT
 
 const client = new Client({
     authStrategy: new LocalAuth({
-        clientId: process.env.SESSION_NAME
+        clientId: process.env.SESSION_NAME || 'legal-segura',
+        dataPath: './.wwebjs_auth'
     }),
     puppeteer: {
         protocolTimeout: 120000,
@@ -71,7 +83,8 @@ const client = new Client({
             '--disable-default-apps',
             '--disable-sync',
             '--no-default-browser-check',
-            '--single-process'
+            '--single-process',
+            '--disable-features=site-per-process'
         ]
     }
 });
