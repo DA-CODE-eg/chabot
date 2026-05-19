@@ -61,9 +61,6 @@ app.use(express.static(__dirname));
 
 app.listen(PORT, () => console.log(`🌐 Servidor web corriendo en puerto ${PORT}`));
 
-// Usar un userDataDir único por proceso para evitar conflicto entre instancias
-const tmpChromeDir = `/tmp/chrome_${Date.now()}_${process.pid}`;
-
 const client = new Client({
     authStrategy: new LocalAuth({
         clientId: process.env.SESSION_NAME || 'legal-segura',
@@ -73,7 +70,6 @@ const client = new Client({
         protocolTimeout: 120000,
         headless: true,
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
-        userDataDir: tmpChromeDir,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -528,4 +524,18 @@ client.on('message', async msg => {
 });
 
 console.log("🚀 Iniciando cliente...");
-client.initialize().catch(err => console.error("❌ Error al inicializar:", err));
+// Esperar 5 segundos antes de inicializar para que el contenedor anterior
+// haya terminado completamente y liberado Chrome
+console.log('⏳ Esperando 5s antes de iniciar Chrome...');
+setTimeout(() => {
+    client.initialize().catch(err => {
+        console.error('❌ Error al inicializar:', err.message);
+        // Si falla por sesión existente, esperar más y reintentar una vez
+        if (err.message.includes('already running') || err.message.includes('existing browser')) {
+            console.log('🔄 Reintentando en 10s...');
+            setTimeout(() => {
+                client.initialize().catch(err2 => console.error('❌ Error definitivo:', err2.message));
+            }, 10000);
+        }
+    });
+}, 5000);
