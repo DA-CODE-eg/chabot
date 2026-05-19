@@ -141,7 +141,7 @@ let config = {};
 let terminoBusqueda = '';
 
 async function cargar() {
-  const res = await fetch('/api/config');
+  const res = await fetch('/admin/api/config');
   config = await res.json();
   filtrar(terminoBusqueda);
 }
@@ -320,7 +320,7 @@ async function subirVideo(id) {
   fd.append('productoId', String(id));
   fd.append('nombre', nombre || file.name);
   toast('⏳ Subiendo...');
-  const r = await fetch('/api/video/subir', { method:'POST', body:fd }).then(x => x.json());
+  const r = await fetch('/admin/api/video/subir', { method:'POST', body:fd }).then(x => x.json());
   toast(r.msg); if (r.ok) cargar();
 }
 
@@ -347,7 +347,7 @@ async function subirManual(id) {
   fd.append('productoId', String(id));
   fd.append('nombre', nombre || file.name);
   toast('⏳ Subiendo...');
-  const r = await fetch('/api/manual/subir', { method:'POST', body:fd }).then(x => x.json());
+  const r = await fetch('/admin/api/manual/subir', { method:'POST', body:fd }).then(x => x.json());
   toast(r.msg); if (r.ok) cargar();
 }
 
@@ -358,10 +358,10 @@ async function eliminarManual(id, idx) {
 }
 
 async function post(url, data) {
-  return fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(x => x.json());
+  return fetch('/admin' + url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(x => x.json());
 }
 async function del(url) {
-  return fetch(url, { method:'DELETE' }).then(x => x.json());
+  return fetch('/admin' + url, { method:'DELETE' }).then(x => x.json());
 }
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -374,7 +374,7 @@ async function cargarWaStatus() {
   const box = document.getElementById('wa-status-box');
   box.innerHTML = '<p style="color:#718096">Cargando estado...</p>';
   try {
-    const status = await fetch('/api/wa/status').then(x => x.json());
+    const status = await fetch('/admin/api/wa/status').then(x => x.json());
     if (status.ready) {
       box.innerHTML = `
         <div style="color:#38a169;font-size:1.05rem"><b>✅ Vinculado</b></div>
@@ -393,7 +393,7 @@ async function cargarWaStatus() {
         <div style="font-size:.9rem;color:#999">Abre WhatsApp en tu teléfono > Dispositivos vinculados > Vincular dispositivo</div>
       `;
       // Cargar QR visual
-      const qrSvg = await fetch('/api/wa/qr').then(x => x.text());
+      const qrSvg = await fetch('/admin/api/wa/qr').then(x => x.text());
       document.getElementById('wa-qr').innerHTML = qrSvg;
       setTimeout(cargarWaStatus, 4000);
     } else {
@@ -411,7 +411,7 @@ async function cargarWaStatus() {
 
 async function logoutWa() {
   if (!confirm("¿Cerrar la sesión de WhatsApp? El bot pedirá QR y podrás vincular otro número.")) return;
-  await fetch('/api/wa/logout', { method:'POST' });
+  await fetch('/admin/api/wa/logout', { method:'POST' });
   cargarWaStatus();
 }
 
