@@ -36,7 +36,8 @@
   <script>
     document.getElementById('lgf').onsubmit = async e => {
       e.preventDefault();
-      const user = user.value; const pass = pass.value;
+      const user = document.getElementById('user').value;
+      const pass = document.getElementById('pass').value;
       const r = await fetch('/admin/api/login', {
         method: 'POST',
         headers:{'Content-Type':'application/json'},
