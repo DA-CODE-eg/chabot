@@ -61,6 +61,9 @@ app.use(express.static(__dirname));
 
 app.listen(PORT, () => console.log(`🌐 Servidor web corriendo en puerto ${PORT}`));
 
+// Usar un userDataDir único por proceso para evitar conflicto entre instancias
+const tmpChromeDir = `/tmp/chrome_${Date.now()}_${process.pid}`;
+
 const client = new Client({
     authStrategy: new LocalAuth({
         clientId: process.env.SESSION_NAME || 'legal-segura',
@@ -70,6 +73,7 @@ const client = new Client({
         protocolTimeout: 120000,
         headless: true,
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+        userDataDir: tmpChromeDir,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
