@@ -1,4 +1,33 @@
 console.log("Servidor Node funcionando");
+
+// ── Limpiar locks de Chrome ANTES de todo ──
+const fs_init = require('fs');
+const path_init = require('path');
+const authDir = path_init.join(__dirname, '.wwebjs_auth');
+try {
+    if (fs_init.existsSync(authDir)) {
+        const lockFiles = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
+        const recDelete = (dir) => {
+            if (!fs_init.existsSync(dir)) return;
+            fs_init.readdirSync(dir).forEach(f => {
+                const full = path_init.join(dir, f);
+                try {
+                    if (lockFiles.includes(f)) {
+                        fs_init.unlinkSync(full);
+                        console.log('🧹 Lock eliminado:', full);
+                    } else if (fs_init.statSync(full).isDirectory()) {
+                        recDelete(full);
+                    }
+                } catch(e2) {}
+            });
+        };
+        recDelete(authDir);
+        console.log('✅ Locks de Chrome limpiados');
+    }
+} catch(e) {
+    console.log('⚠️ No se pudieron limpiar locks:', e.message);
+}
+
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const Groq = require("groq-sdk");
@@ -314,24 +343,12 @@ client.on('message', async msg => {
 
         if (text === "1") {
             const cfg = getMedia();
-            const producto = cfg.productos[option];
-            const videos = producto?.videos || [];
-            
-            if (videos.length > 0) {
-                const videoEntry = videos[0];
-                try {
-                    if (videoEntry.ruta.startsWith('http')) {
-                        await msg.reply("📹 Video explicativo:\n" + videoEntry.ruta);
-                    } else {
-                        const media = MessageMedia.fromFilePath(videoEntry.ruta);
-                        await msg.reply("📹 Enviando video explicativo...");
-                        await msg.reply(media);
-                    }
-                } catch(e) {
-                    await msg.reply("⚠️ No se pudo enviar el video. Contacta a soporte.");
-                }
-            } else {
-                await msg.reply("⚠️ No hay video disponible para este producto aún.");
+            let videoPath = cfg.productos[option]?.video || null;
+
+            if (videoPath) {
+                const media = MessageMedia.fromFilePath(videoPath);
+                await msg.reply("📹 Enviando video explicativo...");
+                await msg.reply(media);
             }
             userState[user] = null;
             return;
@@ -339,24 +356,12 @@ client.on('message', async msg => {
 
         if (text === "2") {
             const cfg = getMedia();
-            const producto = cfg.productos[option];
-            const manuales = producto?.manuales || [];
-            
-            if (manuales.length > 0) {
-                const manualEntry = manuales[0];
-                try {
-                    if (manualEntry.ruta.startsWith('http')) {
-                        await msg.reply("📄 Manual del producto:\n" + manualEntry.ruta);
-                    } else {
-                        const manual = MessageMedia.fromFilePath(manualEntry.ruta);
-                        await msg.reply("📄 Enviando manual del producto...");
-                        await msg.reply(manual);
-                    }
-                } catch(e) {
-                    await msg.reply("⚠️ No se pudo enviar el manual. Contacta a soporte.");
-                }
-            } else {
-                await msg.reply("⚠️ No hay manual disponible para este producto aún.");
+            let manualPath = cfg.productos[option]?.manual || null;
+
+            if (manualPath) {
+                const manual = MessageMedia.fromFilePath(manualPath);
+                await msg.reply("📄 Enviando manual del producto...");
+                await msg.reply(manual);
             }
             userState[user] = null;
             return;
