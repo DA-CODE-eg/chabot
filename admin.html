@@ -372,47 +372,66 @@ function toast(msg) {
 
 async function cargarWaStatus() {
   const box = document.getElementById('wa-status-box');
-  box.innerHTML = '<p style="color:#718096">Cargando estado...</p>';
   try {
-    const status = await fetch('/admin/api/wa/status').then(x => x.json());
-    if (status.ready) {
+    const s = await fetch('/admin/api/wa/status').then(x => x.json());
+
+    if (s.ready) {
       box.innerHTML = `
-        <div style="color:#38a169;font-size:1.05rem"><b>✅ Vinculado</b></div>
-        <div style="margin:10px 0">Número conectado:<br>
-          <span style="background:#eef6ec;color:#276749;padding:3px 7px;border-radius:6px">${status.number}</span>
+        <div style="color:#38a169;font-weight:700;margin-bottom:10px">✅ Conectado</div>
+        <div style="margin-bottom:12px;font-size:.85rem">
+          Número: <code style="background:#eef6ec;padding:2px 8px;border-radius:5px">${s.number}</code>
         </div>
-        <button class="btn btn-red" onclick="logoutWa()">Desvincular / cerrar sesión</button>
-        <div style="font-size:.83rem;color:#888;margin-top:6px">
-          Puedes cerrar sesión y vincular con otro número en cualquier momento.
-        </div>
-      `;
-    } else if (status.qr) {
+        <button class="btn btn-red" onclick="logoutWa()">🔌 Desconectar</button>`;
+      setTimeout(cargarWaStatus, 10000);
+
+    } else if (s.pairingCode) {
       box.innerHTML = `
-        <div style="color:#3182ce;font-size:1.02rem"><b>⏳ Esperando escaneo...</b></div>
-        <div id="wa-qr" style="margin:18px 0 10px 0;display:flex;justify-content:center"></div>
-        <div style="font-size:.9rem;color:#999">Abre WhatsApp en tu teléfono > Dispositivos vinculados > Vincular dispositivo</div>
-      `;
-      // Cargar QR visual
-      const qrSvg = await fetch('/admin/api/wa/qr').then(x => x.text());
-      document.getElementById('wa-qr').innerHTML = qrSvg;
-      setTimeout(cargarWaStatus, 4000);
+        <div style="color:#3182ce;font-weight:700;margin-bottom:14px">📲 Código de vinculación listo</div>
+        <div style="background:#1a365d;color:#fff;text-align:center;border-radius:12px;padding:18px 24px;margin-bottom:14px">
+          <div style="font-size:.75rem;color:#90cdf4;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Ingresa este código en WhatsApp</div>
+          <div style="font-size:2.2rem;font-weight:800;letter-spacing:8px;font-family:monospace">${s.pairingCode}</div>
+        </div>
+        <div style="font-size:.82rem;color:#718096;line-height:1.6">
+          En tu WhatsApp ve a<br>
+          <strong>Configuración → Dispositivos vinculados → Vincular con número</strong><br>
+          e ingresa el código de arriba.
+        </div>`;
+      setTimeout(cargarWaStatus, 5000);
+
     } else {
       box.innerHTML = `
-        <div style="color:#fbbe25;font-size:1rem"><b>Sin sesión activa</b></div>
-        <button class="btn btn-blue" onclick="cargarWaStatus()">Intentar reconectar / buscar QR</button>
-        <div style="font-size:.82rem;color:#888">Si el bot no responde, intenta recargar y verifica el servidor.</div>
-      `;
-      setTimeout(cargarWaStatus, 4000);
+        <div style="color:#d69e2e;font-weight:700;margin-bottom:12px">Sin sesión activa</div>
+        <p style="font-size:.83rem;color:#718096;margin-bottom:14px">Ingresa el número de WhatsApp del bot (con código de país, sin +):</p>
+        <div class="row" style="margin-bottom:10px">
+          <input type="tel" id="inp-numero" placeholder="Ej: 573155050906" value="573155050906" style="flex:1">
+          <button class="btn btn-blue" onclick="solicitarCodigo()">📲 Obtener código</button>
+        </div>
+        <div style="font-size:.78rem;color:#a0aec0">El servidor solicitará un código de 8 letras a WhatsApp.</div>`;
     }
-  } catch {
-    box.innerHTML = '<div style="color:#e53e3e">No se pudo obtener estado. ¿El bot está caído?</div>';
+  } catch(e) {
+    box.innerHTML = `<div style="color:#e53e3e">Error conectando con el servidor.</div>`;
+    setTimeout(cargarWaStatus, 5000);
   }
 }
 
+async function solicitarCodigo() {
+  const numero = document.getElementById('inp-numero').value.trim().replace(/\D/g,'');
+  if (!numero || numero.length < 10) return toast('⚠️ Ingresa un número válido');
+  toast('⏳ Solicitando código a WhatsApp...');
+  const r = await fetch('/admin/api/wa/pair', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ numero })
+  }).then(x => x.json());
+  toast(r.msg);
+  setTimeout(cargarWaStatus, 8000);
+}
+
 async function logoutWa() {
-  if (!confirm("¿Cerrar la sesión de WhatsApp? El bot pedirá QR y podrás vincular otro número.")) return;
+  if (!confirm('¿Desconectar WhatsApp? Tendrás que volver a vincular.')) return;
   await fetch('/admin/api/wa/logout', { method:'POST' });
-  cargarWaStatus();
+  toast('✅ Sesión cerrada');
+  setTimeout(cargarWaStatus, 2000);
 }
 
 async function logoutPanel() {

@@ -149,7 +149,25 @@ router.delete('/api/manual/:productoId/:index', (req, res) => {
 
 router.get('/api/wa/status', (req, res) => {
     const wa = global.waState || {};
-    res.json({ ready: wa.ready || false, qr: !!(wa.qr), number: wa.number || null });
+    res.json({
+        ready: wa.ready || false,
+        qr: !!(wa.qr),
+        number: wa.number || null,
+        pairingCode: wa.pairingCode || null,
+        pairingNumber: wa.pairingNumber || null
+    });
+});
+
+router.post('/api/wa/pair', async (req, res) => {
+    const { numero } = req.body;
+    if (!numero) return res.status(400).json({ ok: false, msg: 'Falta el número' });
+    try {
+        const wa = global.waState || {};
+        if (wa.requestPairing) await wa.requestPairing(numero);
+        res.json({ ok: true, msg: 'Solicitando código...' });
+    } catch(e) {
+        res.status(500).json({ ok: false, msg: 'Error: ' + e.message });
+    }
 });
 
 router.get('/api/wa/qr', async (req, res) => {
@@ -167,22 +185,9 @@ router.post('/api/wa/logout', async (req, res) => {
     try {
         const wa = global.waState || {};
         if (wa.logout) await wa.logout();
-        res.json({ ok: true, msg: "Sesión cerrada. Se generará un nuevo QR en breve." });
+        res.json({ ok: true, msg: 'Sesión cerrada.' });
     } catch(e) {
-        res.status(500).json({ ok: false, msg: "Error cerrando sesión: " + e.message });
-    }
-});
-
-// Borrar sesión completa y forzar QR nuevo
-router.post('/api/wa/reset', async (req, res) => {
-    try {
-        const authDir = require('path').join(__dirname, 'baileys_auth');
-        if (require('fs').existsSync(authDir)) {
-            require('fs').rmSync(authDir, { recursive: true, force: true });
-        }
-        res.json({ ok: true, msg: "Sesión borrada. El servidor generará QR nuevo en ~10 segundos." });
-    } catch(e) {
-        res.status(500).json({ ok: false, msg: "Error: " + e.message });
+        res.status(500).json({ ok: false, msg: 'Error: ' + e.message });
     }
 });
 

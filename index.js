@@ -22,15 +22,31 @@ let waSocket = null;
 let waQR = null;
 let waReady = false;
 let waNumber = null;
+let waPairingCode = null;
+let waPairingNumber = null;
 
 global.waState = {
     get socket() { return waSocket; },
     get qr() { return waQR; },
     get ready() { return waReady; },
     get number() { return waNumber; },
+    get pairingCode() { return waPairingCode; },
+    get pairingNumber() { return waPairingNumber; },
     logout: async () => {
-        if (waSocket) await waSocket.logout();
+        const AUTH_DIR = './baileys_auth';
+        if (waSocket) { try { await waSocket.logout(); } catch(e){} }
+        if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        waReady = false; waQR = null; waNumber = null; waPairingCode = null; waPairingNumber = null;
+    },
+    requestPairing: async (numero) => {
+        const AUTH_DIR = './baileys_auth';
+        if (waSocket) { try { waSocket.end(); } catch(e){} waSocket = null; }
+        if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        waPairingNumber = numero.replace(/\D/g, '');
+        waPairingCode = null;
         waReady = false; waQR = null; waNumber = null;
+        console.log('🔗 Iniciando pairing para:', waPairingNumber);
+        await startBot();
     }
 };
 
@@ -344,9 +360,19 @@ async function startBot() {
     waSocket.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
-            waQR = qr;
-            waReady = false;
-            console.log('📱 QR listo — escanea desde /admin');
+            if (waPairingNumber && !state.creds?.registered) {
+                try {
+                    console.log('📲 Solicitando pairing code para:', waPairingNumber);
+                    const code = await waSocket.requestPairingCode(waPairingNumber);
+                    waPairingCode = code?.match(/.{1,4}/g)?.join('-') || code;
+                    console.log('✅ Código listo:', waPairingCode);
+                } catch(e) {
+                    console.error('❌ Error pidiendo código:', e.message);
+                    waPairingCode = 'ERROR';
+                }
+            } else {
+                waQR = qr;
+            }
         }
         if (connection === 'close') {
             waReady = false; waQR = null; waNumber = null;
