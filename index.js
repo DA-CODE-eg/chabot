@@ -385,13 +385,15 @@ async function startBot() {
             console.log('⚠️ Desconectado, código:', code);
 
             if (code === 405 || code === 401 || code === 403 || code === DisconnectReason.loggedOut) {
-                console.log('🗑️ Sesión rechazada por WhatsApp — borrando y pidiendo QR nuevo...');
+                console.log('🗑️ Sesión rechazada — borrando...');
                 try {
-                    if (fs.existsSync(AUTH_DIR)) {
-                        fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-                        console.log('✅ Sesión borrada. Reiniciando para mostrar QR...');
-                    }
-                } catch(e) { console.error('Error borrando sesión:', e.message); }
+                    if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+                } catch(e) {}
+                if (waPairingNumber) {
+                    waPairingCode = null;
+                    console.log('🛑 Modo pairing — esperando acción desde el admin (no reinicia solo)');
+                    return;
+                }
                 setTimeout(startBot, 8000);
             } else {
                 console.log('🔄 Reconectando en 8s...');
