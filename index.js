@@ -313,16 +313,30 @@ async function handleMessage(jid, body, hasMedia, mediaType) {
 // ── Iniciar bot Baileys ──
 async function startBot() {
     const AUTH_DIR = './baileys_auth';
+
+    // Limpiar sesión vacía/corrupta antes de iniciar
+    if (fs.existsSync(AUTH_DIR)) {
+        const files = fs.readdirSync(AUTH_DIR);
+        const isEmpty = files.length === 0 || files.every(f => {
+            try { return fs.statSync(path.join(AUTH_DIR, f)).size === 0; } catch { return true; }
+        });
+        if (isEmpty) {
+            fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+            console.log('🧹 Sesión vacía limpiada al inicio');
+        }
+    }
+
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
     waSocket = makeWASocket({
         auth: state,
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: ['Legal Segura Bot', 'Chrome', '1.0.0'],
+        browser: ['Legal Segura Bot', 'Safari', '16.0'],
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 60000,
-        keepAliveIntervalMs: 25000,
+        keepAliveIntervalMs: 30000,
+        retryRequestDelayMs: 2000,
     });
 
     waSocket.ev.on('creds.update', saveCreds);
@@ -339,23 +353,18 @@ async function startBot() {
             const code = lastDisconnect?.error?.output?.statusCode;
             console.log('⚠️ Desconectado, código:', code);
 
-            const SESION_INVALIDA = [
-                DisconnectReason.loggedOut,
-                405, 401, 403, 500, 515
-            ];
-
-            if (SESION_INVALIDA.includes(code)) {
-                console.log('🗑️ Sesión inválida (código ' + code + ') — borrando baileys_auth...');
+            if (code === 405 || code === 401 || code === 403 || code === DisconnectReason.loggedOut) {
+                console.log('🗑️ Sesión rechazada por WhatsApp — borrando y pidiendo QR nuevo...');
                 try {
-                    if (fs.existsSync('./baileys_auth')) {
-                        fs.rmSync('./baileys_auth', { recursive: true, force: true });
-                        console.log('✅ Sesión borrada. Generando QR nuevo en 3s...');
+                    if (fs.existsSync(AUTH_DIR)) {
+                        fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+                        console.log('✅ Sesión borrada. Reiniciando para mostrar QR...');
                     }
                 } catch(e) { console.error('Error borrando sesión:', e.message); }
-                setTimeout(startBot, 3000);
+                setTimeout(startBot, 8000);
             } else {
-                console.log('🔄 Reconectando en 5s...');
-                setTimeout(startBot, 5000);
+                console.log('🔄 Reconectando en 8s...');
+                setTimeout(startBot, 8000);
             }
         }
         if (connection === 'open') {

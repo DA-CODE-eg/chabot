@@ -173,4 +173,17 @@ router.post('/api/wa/logout', async (req, res) => {
     }
 });
 
+// Borrar sesión completa y forzar QR nuevo
+router.post('/api/wa/reset', async (req, res) => {
+    try {
+        const authDir = require('path').join(__dirname, 'baileys_auth');
+        if (require('fs').existsSync(authDir)) {
+            require('fs').rmSync(authDir, { recursive: true, force: true });
+        }
+        res.json({ ok: true, msg: "Sesión borrada. El servidor generará QR nuevo en ~10 segundos." });
+    } catch(e) {
+        res.status(500).json({ ok: false, msg: "Error: " + e.message });
+    }
+});
+
 module.exports = router;
