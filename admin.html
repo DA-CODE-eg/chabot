@@ -415,7 +415,9 @@ async function cargarWaStatus() {
 }
 
 async function solicitarCodigo() {
-  const numero = document.getElementById('inp-numero').value.trim().replace(/\D/g,'');
+  const inp = document.getElementById('inp-numero');
+  const numero = (inp ? inp.value : '').trim().replace(/\D/g,'');
+  console.log('Número ingresado:', numero);
   if (!numero || numero.length < 10) return toast('⚠️ Ingresa un número válido');
   toast('⏳ Solicitando código a WhatsApp...');
   const r = await fetch('/admin/api/wa/pair', {
@@ -423,8 +425,9 @@ async function solicitarCodigo() {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ numero })
   }).then(x => x.json());
-  toast(r.msg);
-  setTimeout(cargarWaStatus, 8000);
+  console.log('Respuesta pair:', r);
+  toast(r.msg || JSON.stringify(r));
+  setTimeout(cargarWaStatus, 10000);
 }
 
 async function logoutWa() {

@@ -44,6 +44,7 @@ global.waState = {
         if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
         waPairingNumber = numero.replace(/\D/g, '');
         waPairingCode = null;
+        global._forzarPairing = true;
         waReady = false; waQR = null; waNumber = null;
         console.log('🔗 Iniciando pairing para:', waPairingNumber);
         await startBot();
@@ -360,7 +361,8 @@ async function startBot() {
     waSocket.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
-            if (waPairingNumber && !state.creds?.registered) {
+            if (waPairingNumber && global._forzarPairing) {
+                global._forzarPairing = false;
                 try {
                     console.log('📲 Solicitando pairing code para:', waPairingNumber);
                     const code = await waSocket.requestPairingCode(waPairingNumber);
@@ -368,7 +370,7 @@ async function startBot() {
                     console.log('✅ Código listo:', waPairingCode);
                 } catch(e) {
                     console.error('❌ Error pidiendo código:', e.message);
-                    waPairingCode = 'ERROR';
+                    waPairingCode = 'ERROR: ' + e.message;
                 }
             } else {
                 waQR = qr;
