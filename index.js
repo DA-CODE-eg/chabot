@@ -358,23 +358,26 @@ async function startBot() {
 
     waSocket.ev.on('creds.update', saveCreds);
 
+    // ── Pairing code inmediato (no esperar evento qr) ──
+    if (waPairingNumber && global._forzarPairing) {
+        global._forzarPairing = false;
+        setTimeout(async () => {
+            try {
+                console.log('📲 Solicitando pairing code para:', waPairingNumber);
+                const code = await waSocket.requestPairingCode(waPairingNumber);
+                waPairingCode = code?.match(/.{1,4}/g)?.join('-') || code;
+                console.log('✅ Código listo:', waPairingCode);
+            } catch(e) {
+                console.error('❌ Error pidiendo código:', e.message);
+                waPairingCode = 'ERROR: ' + e.message;
+            }
+        }, 2000);
+    }
+
     waSocket.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
-            if (waPairingNumber && global._forzarPairing) {
-                global._forzarPairing = false;
-                try {
-                    console.log('📲 Solicitando pairing code para:', waPairingNumber);
-                    const code = await waSocket.requestPairingCode(waPairingNumber);
-                    waPairingCode = code?.match(/.{1,4}/g)?.join('-') || code;
-                    console.log('✅ Código listo:', waPairingCode);
-                } catch(e) {
-                    console.error('❌ Error pidiendo código:', e.message);
-                    waPairingCode = 'ERROR: ' + e.message;
-                }
-            } else {
-                waQR = qr;
-            }
+            waQR = qr;
         }
         if (connection === 'close') {
             waReady = false; waQR = null; waNumber = null;
