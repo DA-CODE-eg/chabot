@@ -317,7 +317,7 @@ async function startBot() {
 
     waSocket = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
+        printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
         browser: ['Legal Segura Bot', 'Chrome', '1.0.0'],
         connectTimeoutMs: 60000,
@@ -338,7 +338,22 @@ async function startBot() {
             waReady = false; waQR = null; waNumber = null;
             const code = lastDisconnect?.error?.output?.statusCode;
             console.log('⚠️ Desconectado, código:', code);
-            if (code !== DisconnectReason.loggedOut) {
+
+            const SESION_INVALIDA = [
+                DisconnectReason.loggedOut,
+                405, 401, 403, 500, 515
+            ];
+
+            if (SESION_INVALIDA.includes(code)) {
+                console.log('🗑️ Sesión inválida (código ' + code + ') — borrando baileys_auth...');
+                try {
+                    if (fs.existsSync('./baileys_auth')) {
+                        fs.rmSync('./baileys_auth', { recursive: true, force: true });
+                        console.log('✅ Sesión borrada. Generando QR nuevo en 3s...');
+                    }
+                } catch(e) { console.error('Error borrando sesión:', e.message); }
+                setTimeout(startBot, 3000);
+            } else {
                 console.log('🔄 Reconectando en 5s...');
                 setTimeout(startBot, 5000);
             }
