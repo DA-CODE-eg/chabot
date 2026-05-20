@@ -355,7 +355,7 @@ async function startBot() {
         browser: ['Legal Segura Bot', 'Chrome', '120.0.0'],
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 60000,
-        keepAliveIntervalMs: 30000,
+        keepAliveIntervalMs: 9000,
         retryRequestDelayMs: 2000,
     });
 
@@ -395,8 +395,14 @@ async function startBot() {
                 }
                 setTimeout(startBot, 8000);
             } else {
-                console.log('🔄 Reconectando en 8s...');
-                setTimeout(startBot, 8000);
+                if (waPairingNumber) {
+                    waPairingCode = null;
+                    console.log('🔄 Reconectando para nuevo código en 5s...');
+                    setTimeout(startBot, 5000);
+                } else {
+                    console.log('🔄 Reconectando en 8s...');
+                    setTimeout(startBot, 8000);
+                }
             }
         }
         if (connection === 'open') {
