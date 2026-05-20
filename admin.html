@@ -395,7 +395,8 @@ async function cargarWaStatus() {
           En tu WhatsApp ve a<br>
           <strong>Configuración → Dispositivos vinculados → Vincular con número</strong><br>
           e ingresa el código de arriba.
-        </div>`;
+        </div>
+        <button class="btn btn-red" onclick="logoutWa()" style="margin-top:14px;width:100%">🔄 Cambiar número</button>`;
       setTimeout(cargarWaStatus, 5000);
 
     } else {
