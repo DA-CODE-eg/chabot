@@ -163,8 +163,12 @@ router.post('/api/wa/pair', async (req, res) => {
     if (!numero) return res.status(400).json({ ok: false, msg: 'Falta el número' });
     try {
         const wa = global.waState || {};
-        if (wa.requestPairing) await wa.requestPairing(numero);
-        res.json({ ok: true, msg: 'Solicitando código...' });
+        if (numero === 'qr') {
+            if (wa.startQR) await wa.startQR();
+        } else {
+            if (wa.requestPairing) await wa.requestPairing(numero);
+        }
+        res.json({ ok: true, msg: 'Iniciando...' });
     } catch(e) {
         res.status(500).json({ ok: false, msg: 'Error: ' + e.message });
     }

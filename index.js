@@ -48,6 +48,14 @@ global.waState = {
         waReady = false; waQR = null; waNumber = null;
         console.log('🔗 Iniciando pairing para:', waPairingNumber);
         await startBot();
+    },
+    startQR: async () => {
+        const AUTH_DIR = './baileys_auth';
+        if (waSocket) { try { waSocket.end(); } catch(e){} waSocket = null; }
+        if (fs.existsSync(AUTH_DIR)) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        waPairingNumber = null; waPairingCode = null;
+        waReady = false; waQR = null; waNumber = null;
+        await startBot();
     }
 };
 
@@ -353,10 +361,7 @@ async function startBot() {
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
         browser: ['Legal Segura Bot', 'Chrome', '120.0.0'],
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
         keepAliveIntervalMs: 9000,
-        retryRequestDelayMs: 2000,
     });
 
     waSocket.ev.on('creds.update', saveCreds);

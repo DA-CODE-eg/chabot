@@ -384,17 +384,14 @@ async function cargarWaStatus() {
         <button class="btn btn-red" onclick="logoutWa()">🔌 Desconectar</button>`;
       setTimeout(cargarWaStatus, 10000);
 
-    } else if (s.pairingCode) {
+    } else if (s.qr) {
       box.innerHTML = `
-        <div style="color:#3182ce;font-weight:700;margin-bottom:14px">📲 Código de vinculación listo</div>
-        <div style="background:#1a365d;color:#fff;text-align:center;border-radius:12px;padding:18px 24px;margin-bottom:14px">
-          <div style="font-size:.75rem;color:#90cdf4;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Ingresa este código en WhatsApp</div>
-          <div style="font-size:2.2rem;font-weight:800;letter-spacing:8px;font-family:monospace">${s.pairingCode}</div>
+        <div style="color:#3182ce;font-weight:700;margin-bottom:14px">📷 Escanea el QR con WhatsApp</div>
+        <div style="text-align:center;margin-bottom:14px">
+          <img src="/admin/api/wa/qr?t=${Date.now()}" style="width:220px;height:220px;border-radius:12px">
         </div>
-        <div style="font-size:.82rem;color:#718096;line-height:1.6">
-          En tu WhatsApp ve a<br>
-          <strong>Configuración → Dispositivos vinculados → Vincular con número</strong><br>
-          e ingresa el código de arriba.
+        <div style="font-size:.82rem;color:#718096">
+          En WhatsApp ve a <strong>Configuración → Dispositivos vinculados → Vincular dispositivo</strong> y escanea.
         </div>
         <button class="btn btn-red" onclick="logoutWa()" style="margin-top:14px;width:100%">🔄 Cambiar número</button>`;
       setTimeout(cargarWaStatus, 5000);
@@ -402,12 +399,8 @@ async function cargarWaStatus() {
     } else {
       box.innerHTML = `
         <div style="color:#d69e2e;font-weight:700;margin-bottom:12px">Sin sesión activa</div>
-        <p style="font-size:.83rem;color:#718096;margin-bottom:14px">Ingresa el número de WhatsApp del bot (con código de país, sin +):</p>
-        <div class="row" style="margin-bottom:10px">
-          <input type="tel" id="inp-numero" placeholder="Ej: 573155050906" style="flex:1">
-          <button class="btn btn-blue" onclick="solicitarCodigo()">📲 Obtener código</button>
-        </div>
-        <div style="font-size:.78rem;color:#a0aec0">El servidor solicitará un código de 8 letras a WhatsApp.</div>`;
+        <p style="font-size:.83rem;color:#718096;margin-bottom:14px">Haz clic para generar el QR de vinculación:</p>
+        <button class="btn btn-blue" onclick="iniciarBot()" style="width:100%">📷 Generar QR</button>`;
     }
   } catch(e) {
     box.innerHTML = `<div style="color:#e53e3e">Error conectando con el servidor.</div>`;
@@ -415,20 +408,15 @@ async function cargarWaStatus() {
   }
 }
 
-async function solicitarCodigo() {
-  const inp = document.getElementById('inp-numero');
-  const numero = (inp ? inp.value : '').trim().replace(/\D/g,'');
-  console.log('Número ingresado:', numero);
-  if (!numero || numero.length < 10) return toast('⚠️ Ingresa un número válido');
-  toast('⏳ Solicitando código a WhatsApp...');
+async function iniciarBot() {
+  toast('⏳ Iniciando conexión...');
   const r = await fetch('/admin/api/wa/pair', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ numero })
+    body: JSON.stringify({ numero: 'qr' })
   }).then(x => x.json());
-  console.log('Respuesta pair:', r);
-  toast(r.msg || JSON.stringify(r));
-  setTimeout(cargarWaStatus, 10000);
+  toast(r.msg);
+  setTimeout(cargarWaStatus, 5000);
 }
 
 async function logoutWa() {
