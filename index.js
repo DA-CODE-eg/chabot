@@ -1,96 +1,45 @@
 console.log("Servidor Node funcionando");
 
-// ── Matar Chrome y limpiar locks ANTES de todo ──
-const fs_init = require('fs');
-const path_init = require('path');
-const { execSync } = require('child_process');
-
-// 1. Matar procesos Chrome que quedaron vivos
-try {
-    execSync('pkill -9 -f chrome 2>/dev/null; pkill -9 -f chromium 2>/dev/null; sleep 1', { shell: true });
-    console.log('✅ Procesos Chrome terminados');
-} catch(e) {
-    console.log('ℹ️ No había procesos Chrome corriendo');
-}
-
-// 2. Borrar lock files
-const authDir = path_init.join(__dirname, '.wwebjs_auth');
-try {
-    if (fs_init.existsSync(authDir)) {
-        const lockFiles = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
-        const recDelete = (dir) => {
-            if (!fs_init.existsSync(dir)) return;
-            fs_init.readdirSync(dir).forEach(f => {
-                const full = path_init.join(dir, f);
-                try {
-                    if (lockFiles.includes(f)) {
-                        fs_init.unlinkSync(full);
-                        console.log('🧹 Lock eliminado:', full);
-                    } else if (fs_init.statSync(full).isDirectory()) {
-                        recDelete(full);
-                    }
-                } catch(e2) {}
-            });
-        };
-        recDelete(authDir);
-        console.log('✅ Locks de Chrome limpiados');
-    }
-} catch(e) {
-    console.log('⚠️ No se pudieron limpiar locks:', e.message);
-}
-
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
-const Groq = require("groq-sdk");
-
 require('dotenv').config();
 
-// Leer config de medios dinámicamente
-function getMedia() {
-    return JSON.parse(require('fs').readFileSync('./media-config.json', 'utf8'));
-}
-
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const fs = require('fs');
+const path = require('path');
+const Groq = require("groq-sdk");
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const pino = require('pino');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cookieParser());
-app.use('/admin', require('./admin'));
 app.use(express.static(__dirname));
 
-app.listen(PORT, () => console.log(`🌐 Servidor web corriendo en puerto ${PORT}`));
+// ── Estado global del bot (accesible desde admin.js) ──
+let waSocket = null;
+let waQR = null;
+let waReady = false;
+let waNumber = null;
 
-const client = new Client({
-    authStrategy: new LocalAuth({
-        clientId: process.env.SESSION_NAME || 'legal-segura',
-        dataPath: './.wwebjs_auth'
-    }),
-    puppeteer: {
-        protocolTimeout: 120000,
-        headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--disable-extensions',
-            '--disable-background-networking',
-            '--disable-default-apps',
-            '--disable-sync',
-            '--no-default-browser-check',
-            '--single-process',
-            '--disable-features=site-per-process'
-        ]
+global.waState = {
+    get socket() { return waSocket; },
+    get qr() { return waQR; },
+    get ready() { return waReady; },
+    get number() { return waNumber; },
+    logout: async () => {
+        if (waSocket) await waSocket.logout();
+        waReady = false; waQR = null; waNumber = null;
     }
-});
+};
 
-// Control de estado por usuario
-const userState = {};
+// ── Leer config de medios ──
+function getMedia() {
+    return JSON.parse(fs.readFileSync('./media-config.json', 'utf8'));
+}
+
+// ── Groq IA ──
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 async function responderIA(textoUsuario) {
@@ -115,7 +64,6 @@ Instrucciones:
 - Si la pregunta no tiene relación con Legal Segura ni servicios legales/digitales, responde brevemente que solo puedes ayudar con temas relacionados a la empresa.
 - Sé conciso. Máximo 3-6 líneas por respuesta.
     `;
-
     try {
         const response = await groq.chat.completions.create({
             model: "llama-3.3-70b-versatile",
@@ -133,47 +81,50 @@ Instrucciones:
     }
 }
 
-client.on('qr', qr => {
-    console.log("📱 Escanea este QR con tu WhatsApp:");
-    qrcode.generate(qr, { small: true });
-});
+// ── Estado por usuario ──
+const userState = {};
 
-client.on('loading_screen', (percent, message) => {
-    console.log(`⏳ Cargando WhatsApp Web: ${percent}% - ${message}`);
-});
+// ── Enviar texto ──
+async function sendMsg(jid, text) {
+    if (!waSocket || !waReady) return;
+    await waSocket.sendMessage(jid, { text });
+}
 
-client.on('authenticated', () => {
-    console.log('✅ Autenticación exitosa');
-});
+// ── Enviar archivo ──
+function getMimeFromPath(filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    if (['.mp4', '.mov', '.avi'].includes(ext)) return 'video/mp4';
+    if (ext === '.pdf') return 'application/pdf';
+    return 'application/octet-stream';
+}
 
-client.on('auth_failure', (msg) => {
-    console.error('❌ Error de autenticación:', msg);
-});
+async function sendFile(jid, filePath, fileName) {
+    if (!waSocket || !waReady) return;
+    if (filePath.startsWith('http')) {
+        await waSocket.sendMessage(jid, { text: fileName + ':\n' + filePath });
+    } else {
+        const buffer = fs.readFileSync(filePath);
+        const mime = getMimeFromPath(filePath);
+        if (mime.includes('video')) {
+            await waSocket.sendMessage(jid, { video: buffer, caption: fileName });
+        } else if (mime.includes('pdf')) {
+            await waSocket.sendMessage(jid, { document: buffer, mimetype: 'application/pdf', fileName });
+        } else {
+            await waSocket.sendMessage(jid, { document: buffer, fileName });
+        }
+    }
+}
 
-client.on('disconnected', (reason) => {
-    console.log('⚠️ Cliente desconectado:', reason);
-    client.initialize();
-});
+// ── Lógica de mensajes ──
+async function handleMessage(jid, body, hasMedia, mediaType) {
+    const text = (body || '').toLowerCase().trim();
+    const user = jid;
 
-client.on('ready', () => {
-    console.log("🤖 Chatbot conectado correctamente.");
-});
-
-client.on('message', async msg => {
-    const text = msg.body.toLowerCase().trim();
-    const user = msg.from;
-
-    // ---------------------------------------------------------------
-    // 🔥 DETECTAR COMPROBANTE (SOLO IMAGEN)
-    // ---------------------------------------------------------------
-    if (
-        userState[user]?.step === "waiting_comprobante" &&
-        msg.hasMedia &&
-        msg.type === "image"
-    ) {
-        msg.reply(
+    // Comprobante de pago
+    if (userState[user]?.step === "waiting_comprobante" && hasMedia && mediaType === "image") {
+        await sendMsg(user,
             "📄 Hemos recibido tu comprobante de pago correctamente.\n\n" +
-            "Para activar tu servicio de *Correo Electrónico Certificado*, por favor diligencia el siguiente formulario:\n\n" +
+            "Para activar tu servicio, por favor diligencia el siguiente formulario:\n\n" +
             "📝 FORMULARIO:\n" +
             "👉 https://docs.google.com/forms/d/e/1FAIpQLSfKZog9bdN4pt0EMLc1ec7nbsPrINX6MdTEcfKvKcbPH-qm6g/viewform\n\n" +
             "⏱️ Una vez lo completes, tu servicio será activado lo antes posible."
@@ -182,38 +133,28 @@ client.on('message', async msg => {
         return;
     }
 
-    if (userState[user]?.step === "waiting_comprobante" && !msg.hasMedia) {
-        msg.reply(
+    if (userState[user]?.step === "waiting_comprobante" && !hasMedia) {
+        await sendMsg(user,
             "📸 Por favor envía una *imagen* de tu comprobante de pago para continuar.\n\n" +
             "Si deseas cancelar, escribe *hola* para volver al menú principal."
         );
         return;
     }
 
-    // ---------------------------------------------------------------
-    // RESPUESTA AUTOMÁTICA A "GRACIAS"
-    // ---------------------------------------------------------------
+    // Gracias
     if (text.includes("gracias")) {
-        msg.reply("¡Gracias por contactarnos! Si necesitas algo más, estaremos atentos. ¡Feliz día!");
+        await sendMsg(user, "¡Gracias por contactarnos! Si necesitas algo más, estaremos atentos. ¡Feliz día!");
         return;
     }
 
-    // ---------------------------------------------------------------
-    // 0. SALUDOS → MENÚ INICIAL
-    // ---------------------------------------------------------------
+    // Saludo → menú
     if (
-        text.includes("hola") ||
-        text.includes("buenos dias") ||
-        text.includes("buenos días") ||
-        text.includes("buenas tardes") ||
-        text.includes("buenas noches") ||
-        text.includes("menu") ||
-        text.includes("menú") ||
-        text.includes("inicio")
+        text.includes("hola") || text.includes("buenos dias") || text.includes("buenos días") ||
+        text.includes("buenas tardes") || text.includes("buenas noches") ||
+        text.includes("menu") || text.includes("menú") || text.includes("inicio")
     ) {
         userState[user] = { step: "initial_menu" };
-
-        msg.reply(
+        await sendMsg(user,
             "👋 Hola, bienvenido a *Legal Segura*.\n\n" +
             "¿Qué deseas hacer?\n\n" +
             "1️⃣ Dudas sobre funcionamiento del producto\n" +
@@ -225,14 +166,11 @@ client.on('message', async msg => {
         return;
     }
 
-    // ---------------------------------------------------------------
-    // 1. PROCESAR MENÚ INICIAL
-    // ---------------------------------------------------------------
+    // Menú inicial
     if (userState[user]?.step === "initial_menu") {
-
         if (text === "1") {
             userState[user].step = "dudas_menu";
-            msg.reply(
+            await sendMsg(user,
                 "📝 ¿Sobre qué producto tienes dudas?\n\n" +
                 "1️⃣ Correo Electrónico Certificado\n" +
                 "2️⃣ Firma Electrónica Certificada\n" +
@@ -243,23 +181,21 @@ client.on('message', async msg => {
             );
             return;
         }
-
         if (text === "2") {
             userState[user].step = "purchase_menu";
-            msg.reply(
+            await sendMsg(user,
                 "🛒 *Compra de productos*\n\n" +
                 "Selecciona el producto que deseas comprar:\n\n" +
                 "1️⃣ Correo Electrónico Certificado\n" +
                 "2️⃣ Firma Electrónica Certificada\n" +
                 "3️⃣ Firma Digital\n" +
-                "4️⃣ Firma Electrónica\n"
+                "4️⃣ Firma Electrónica"
             );
             return;
         }
-
         if (text === "3") {
             userState[user].step = "info_menu";
-            msg.reply(
+            await sendMsg(user,
                 "📘 ¿Sobre qué servicio deseas información?\n\n" +
                 "1️⃣ Correo Electrónico Certificado\n" +
                 "2️⃣ Firma Electrónica Certificada\n" +
@@ -268,10 +204,9 @@ client.on('message', async msg => {
             );
             return;
         }
-
         if (text === "4") {
             userState[user] = null;
-            msg.reply(
+            await sendMsg(user,
                 "👨‍💼 *Contacto con asesor*\n\n" +
                 "Tu solicitud ha sido registrada correctamente.\n\n" +
                 "En breve uno de nuestros asesores continuará la atención por este mismo chat.\n\n" +
@@ -279,182 +214,71 @@ client.on('message', async msg => {
             );
             return;
         }
-
-        const respuestaIA = await responderIA(msg.body);
-        await msg.reply(respuestaIA + "\n\n_Escribe *hola* para ver el menú principal._");
+        const ia = await responderIA(body);
+        await sendMsg(user, ia + "\n\n_Escribe *hola* para ver el menú principal._");
         return;
     }
 
-    // ---------------------------------------------------------------
-    // 2. DUDAS → EXPLICACIÓN + VIDEO O MANUAL
-    // ---------------------------------------------------------------
+    // Dudas → producto
     if (userState[user]?.step === "dudas_menu" && ["1","2","3","4","5"].includes(text)) {
-
         userState[user].option = text;
         userState[user].step = "dudas_video";
-
-        if (text === "1") {
-            msg.reply(
-                "📬 *Correo Electrónico Certificado*\n\n" +
-                "Este servicio cuenta con plena validez jurídica y permite certificar el envío, la recepción y el contenido de los mensajes electrónicos, garantizando su integridad, autenticidad y trazabilidad conforme a la normativa vigente.\n\n" +
-                "Si lo deseas, podemos enviarte un video explicativo paso a paso o el manual del producto para que conozcas su funcionamiento en detalle.\n\n" +
-                "Por favor indícanos tu preferencia:\n" +
-                "1️⃣ Video explicativo\n" +
-                "2️⃣ Manual del producto"
-            );
-        }
-
-        if (text === "2") {
-            msg.reply(
-                "✍️ *Firma Electrónica Certificada*\n\n" +
-                "Permite firmar documentos digitalmente con validez jurídica.\n\n" +
-                "Por favor indícanos tu preferencia:\n" +
-                "1️⃣ Video explicativo\n" +
-                "2️⃣ Manual del producto"
-            );
-        }
-
-        if (text === "3") {
-            msg.reply(
-                "🔐 *Firma Digital*\n\n" +
-                "Firma respaldada por un certificado digital emitido por una entidad certificadora.\n\n" +
-                "Por favor indícanos tu preferencia:\n" +
-                "1️⃣ Video explicativo\n" +
-                "2️⃣ Manual del producto"
-            );
-        }
-
-        if (text === "4") {
-            msg.reply(
-                "📱 *App Tools*\n\n" +
-                "Aplicación diseñada para la revisión de certificados de forma rápida y segura, permitiendo a los usuarios verificar la información, hacer seguimiento al estado de los envíos y consultar los soportes generados.\n\n" +
-                "Por favor indícanos tu preferencia:\n" +
-                "1️⃣ Video explicativo\n" +
-                "2️⃣ Manual del producto"
-            );
-        }
-
-        if (text === "5") {
-            msg.reply(
-                "✍️ *Firma Electrónica (Firma Plus)*\n\n" +
-                "Permite firmar desde cualquier lugar y dispositivo con mecanismos de autenticación como código OTP, selfie y firma manuscrita digital. Tiene plena validez jurídica.\n\n" +
-                "Por favor indícanos tu preferencia:\n" +
-                "1️⃣ Video explicativo\n" +
-                "2️⃣ Manual del producto"
-            );
-        }
-
+        const desc = {
+            "1": "📬 *Correo Electrónico Certificado*\n\nEste servicio cuenta con plena validez jurídica y permite certificar el envío, la recepción y el contenido de los mensajes electrónicos.",
+            "2": "✍️ *Firma Electrónica Certificada*\n\nPermite firmar documentos digitalmente con validez jurídica.",
+            "3": "🔐 *Firma Digital*\n\nFirma respaldada por un certificado digital emitido por una entidad certificadora.",
+            "4": "📱 *App Tools*\n\nAplicación diseñada para la revisión de certificados de forma rápida y segura.",
+            "5": "✍️ *Firma Electrónica (Firma Plus)*\n\nPermite firmar desde cualquier lugar con OTP, selfie y firma manuscrita digital."
+        };
+        await sendMsg(user, desc[text] + "\n\nPor favor indícanos tu preferencia:\n1️⃣ Video explicativo\n2️⃣ Manual del producto");
         return;
     }
 
-    // ---------------------------------------------------------------
-    // ENVÍO DE VIDEO O MANUAL
-    // ---------------------------------------------------------------
+    // Envío video o manual
     if (userState[user]?.step === "dudas_video") {
-
         const option = userState[user].option;
-
+        const cfg = getMedia();
+        const producto = cfg.productos[option];
         if (text === "1") {
-            const cfg = getMedia();
-            let videoPath = cfg.productos[option]?.video || null;
-
-            if (videoPath) {
-                const media = MessageMedia.fromFilePath(videoPath);
-                await msg.reply("📹 Enviando video explicativo...");
-                await msg.reply(media);
+            const videos = producto?.videos || [];
+            if (videos.length > 0) {
+                await sendMsg(user, "📹 Enviando video explicativo...");
+                await sendFile(user, videos[0].ruta, videos[0].nombre).catch(() =>
+                    sendMsg(user, "⚠️ No se pudo enviar el video. Contacta a soporte.")
+                );
+            } else {
+                await sendMsg(user, "⚠️ No hay video disponible para este producto aún.");
             }
             userState[user] = null;
             return;
         }
-
         if (text === "2") {
-            const cfg = getMedia();
-            let manualPath = cfg.productos[option]?.manual || null;
-
-            if (manualPath) {
-                const manual = MessageMedia.fromFilePath(manualPath);
-                await msg.reply("📄 Enviando manual del producto...");
-                await msg.reply(manual);
+            const manuales = producto?.manuales || [];
+            if (manuales.length > 0) {
+                await sendMsg(user, "📄 Enviando manual del producto...");
+                await sendFile(user, manuales[0].ruta, manuales[0].nombre).catch(() =>
+                    sendMsg(user, "⚠️ No se pudo enviar el manual. Contacta a soporte.")
+                );
+            } else {
+                await sendMsg(user, "⚠️ No hay manual disponible para este producto aún.");
             }
             userState[user] = null;
             return;
         }
     }
 
-    // ---------------------------------------------------------------
-    // 3. COMPRA DE PRODUCTOS → PRECIOS Y DETALLES
-    // ---------------------------------------------------------------
+    // Compra
     if (userState[user]?.step === "purchase_menu") {
-
-        if (text === "1") {
+        const precios = {
+            "1": "📬 *CORREO ELECTRÓNICO CERTIFICADO – 2026*\n\n5 correos = *$13.700 COP* IVA incluido\n10 correos = *$21.000 COP* IVA incluido\n20 correos = *$40.000 COP* IVA incluido\n50 correos = *$79.000 COP* IVA incluido\n100 correos = *$150.000 COP* IVA incluido\n200 correos = *$240.000 COP* IVA incluido\n500 correos = *$525.000 COP* IVA incluido",
+            "2": "✍️ *FIRMA ELECTRÓNICA CERTIFICADA*\n\n• 1 año = *$120.000 + IVA*\n• 2 años = *$180.000 + IVA*",
+            "3": "🔐 *FIRMA DIGITAL*\n\n🖥️ Token Virtual\n• 1 año = *$160.000 + IVA*\n• 2 años = *$220.000 + IVA*\n\n🔑 Token Físico\n• 1 año = *$220.000 + IVA*\n• 2 años = *$265.000 + IVA*",
+            "4": "✍️ *FIRMA ELECTRÓNICA*\n\n• 1 año = *$120.000 + IVA*\n• 2 años = *$180.000 + IVA*"
+        };
+        if (precios[text]) {
             userState[user] = { step: "waiting_comprobante" };
-            msg.reply(
-                "📬 *PRECIOS PAQUETES CORREO ELECTRÓNICO CERTIFICADO – 2026*\n\n" +
-                "5 correos electrónicos = *$13.700 COP* IVA incluido\n" +
-                "10 correos electrónicos = *$21.000 COP* IVA incluido\n" +
-                "20 correos electrónicos = *$40.000 COP* IVA incluido\n" +
-                "50 correos electrónicos = *$79.000 COP* IVA incluido\n" +
-                "80 correos electrónicos = *$125.000 COP* IVA incluido\n" +
-                "100 correos electrónicos = *$150.000 COP* IVA incluido\n" +
-                "200 correos electrónicos = *$240.000 COP* IVA incluido\n" +
-                "500 correos electrónicos = *$525.000 COP* IVA incluido\n\n" +
-                "💳 *Métodos de pago:*\n" +
-                "• Banco Caja Social – Cuenta corriente 2100-441-3030\n" +
-                "• NEQUI: 315 5050906\n" +
-                "• DAVIPLATA: 315 5050906\n" +
-                "A nombre de Legal Segura S.A.S – NIT 901.474.747-5\n\n" +
-                "📩 Enviar comprobante a: contacto@legalsegura.com\n" +
-                "⚠️ Para factura electrónica, pagar por Caja Social.\n\n" +
-                "📸 Después de pagar, envía aquí tu comprobante (imagen)."
-            );
-            return;
-        }
-
-        if (text === "2") {
-            userState[user] = { step: "waiting_comprobante" };
-            msg.reply(
-                "✍️ *FIRMA ELECTRÓNICA CERTIFICADA*\n\n" +
-                "💼 *Planes disponibles:*\n" +
-                "• 1 año = *$120.000 + IVA*\n" +
-                "• 2 años = *$180.000 + IVA*\n\n" +
-                "💳 *Métodos de pago:*\n" +
-                "• Banco Caja Social – Cuenta corriente 2100-441-3030\n" +
-                "• NEQUI: 315 5050906\n" +
-                "• DAVIPLATA: 315 5050906\n" +
-                "A nombre de Legal Segura S.A.S – NIT 901.474.747-5\n\n" +
-                "📸 Después de pagar, envía aquí tu comprobante (imagen)."
-            );
-            return;
-        }
-
-        if (text === "3") {
-            userState[user] = { step: "waiting_comprobante" };
-            msg.reply(
-                "🔐 *FIRMA DIGITAL*\n\n" +
-                "💼 *Planes disponibles:*\n\n" +
-                "🖥️ Token Virtual\n" +
-                "• 1 año = *$160.000 + IVA*\n" +
-                "• 2 años = *$220.000 + IVA*\n\n" +
-                "🔑 Token Físico\n" +
-                "• 1 año = *$220.000 + IVA*\n" +
-                "• 2 años = *$265.000 + IVA*\n\n" +
-                "💳 *Métodos de pago:*\n" +
-                "• Banco Caja Social – Cuenta corriente 2100-441-3030\n" +
-                "• NEQUI: 315 5050906\n" +
-                "• DAVIPLATA: 315 5050906\n" +
-                "A nombre de Legal Segura S.A.S – NIT 901.474.747-5\n\n" +
-                "📸 Después de pagar, envía aquí tu comprobante (imagen)."
-            );
-            return;
-        }
-
-        if (text === "4") {
-            userState[user] = { step: "waiting_comprobante" };
-            msg.reply(
-                "✍️ *FIRMA ELECTRÓNICA*\n\n" +
-                "💼 *Planes disponibles:*\n" +
-                "• 1 año = *$120.000 + IVA*\n" +
-                "• 2 años = *$180.000 + IVA*\n\n" +
+            await sendMsg(user,
+                precios[text] + "\n\n" +
                 "💳 *Métodos de pago:*\n" +
                 "• Banco Caja Social – Cuenta corriente 2100-441-3030\n" +
                 "• NEQUI: 315 5050906\n" +
@@ -466,76 +290,88 @@ client.on('message', async msg => {
         }
     }
 
-    // ---------------------------------------------------------------
-    // 4. INFORMACIÓN GENERAL
-    // ---------------------------------------------------------------
+    // Info general
     if (userState[user]?.step === "info_menu") {
-
-        if (text === "1") {
-            msg.reply(
-                "📬 *Correo Electrónico Certificado*\n\n" +
-                "Es un servicio que garantiza la entrega, recepción y trazabilidad de un mensaje de datos con validez jurídica. Funciona como el equivalente digital del correo físico, aplicando la equivalencia funcional establecida en la Ley 527 de 1999. Permite demostrar cuándo se envió, cuándo fue recibido y por quién, gracias al acuse de recibo. Es un medio seguro para comunicaciones formales con fuerza probatoria.\n\n" +
-                "🔹 Escribe *hola* para volver al menú principal\n" +
-                "🔹 O escribe *gracias* para finalizar"
-            );
-            userState[user] = null;
-            return;
-        }
-
-        if (text === "2") {
-            msg.reply(
-                "✍️ *Firma Electrónica Certificada*\n\n" +
-                "Incluye métodos como contraseñas, códigos, biometría o claves, que permiten identificar a una persona en un entorno digital. Su validez está regulada por el Decreto 2364 de 2012 y es aceptada siempre que sea confiable y apropiada para el fin del mensaje. Tiene plena validez jurídica si cumple los criterios de autenticidad e integridad establecidos por la norma.\n\n" +
-                "🔹 Escribe *hola* para volver al menú principal\n" +
-                "🔹 O escribe *gracias* para finalizar"
-            );
-            userState[user] = null;
-            return;
-        }
-
-        if (text === "3") {
-            msg.reply(
-                "🔐 *Firma Digital*\n\n" +
-                "Es un método criptográfico que vincula de manera única al firmante con un mensaje de datos, asegurando autenticidad, integridad y no repudio. Solo puede ser emitida y validada mediante entidades de certificación autorizadas, cumpliendo los atributos definidos en la Ley 527 de 1999. Tiene la misma validez jurídica que una firma manuscrita.\n\n" +
-                "🔹 Escribe *hola* para volver al menú principal\n" +
-                "🔹 O escribe *gracias* para finalizar"
-            );
-            userState[user] = null;
-            return;
-        }
-
-        if (text === "4") {
-            msg.reply(
-                "✍️ *Firma Electrónica (Firma Plus)*\n\n" +
-                "Permite firmar documentos digitales en línea, garantizando la identidad del firmante, la integridad del documento y el no repudio. Los usuarios pueden firmar desde cualquier lugar y dispositivo, utilizando OTP por SMS o correo, validación de identidad, selfie y firma manuscrita digital. Cuenta con plena validez jurídica conforme a la Ley 527 de 1999 y el Decreto 2364 de 2012.\n\n" +
-                "🔹 Escribe *hola* para volver al menú principal\n" +
-                "🔹 O escribe *gracias* para finalizar"
-            );
+        const infos = {
+            "1": "📬 *Correo Electrónico Certificado*\n\nGarantiza la entrega, recepción y trazabilidad de un mensaje de datos con validez jurídica conforme a la Ley 527 de 1999.",
+            "2": "✍️ *Firma Electrónica Certificada*\n\nIncluye contraseñas, códigos, biometría o claves. Regulada por el Decreto 2364 de 2012.",
+            "3": "🔐 *Firma Digital*\n\nMétodo criptográfico con validez jurídica igual a firma manuscrita. Emitida por entidades certificadoras autorizadas.",
+            "4": "✍️ *Firma Electrónica (Firma Plus)*\n\nFirma desde cualquier lugar con OTP, selfie y firma manuscrita digital. Validez jurídica plena."
+        };
+        if (infos[text]) {
+            await sendMsg(user, infos[text] + "\n\n🔹 Escribe *hola* para volver al menú principal");
             userState[user] = null;
             return;
         }
     }
 
-    // ---------------------------------------------------------------
-    // ✅ IA GROQ: RESPONDE PREGUNTAS FUERA DEL MENÚ
-    // ---------------------------------------------------------------
-    const respuestaIA = await responderIA(msg.body);
-    await msg.reply(respuestaIA + "\n\n_💡 Escribe *hola* si deseas ver el menú de opciones._");
-});
+    // IA Groq
+    const ia = await responderIA(body);
+    await sendMsg(user, ia + "\n\n_💡 Escribe *hola* si deseas ver el menú de opciones._");
+}
 
-console.log("🚀 Iniciando cliente...");
-// Esperar 5 segundos antes de inicializar para que el contenedor anterior
-// haya terminado completamente y liberado Chrome
-console.log('⏳ Esperando 5s antes de iniciar Chrome...');
-setTimeout(() => {
-    client.initialize().catch(err => {
-        console.error('❌ Error al inicializar:', err.message);
-        // Si falla por sesión existente, esperar más y reintentar una vez
-        if (err.message.includes('already running') || err.message.includes('existing browser')) {
-            console.log('🔄 Reintentando en 10s...');
-            setTimeout(() => {
-                client.initialize().catch(err2 => console.error('❌ Error definitivo:', err2.message));
-            }, 10000);
+// ── Iniciar bot Baileys ──
+async function startBot() {
+    const AUTH_DIR = './baileys_auth';
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+
+    waSocket = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        logger: pino({ level: 'silent' }),
+        browser: ['Legal Segura Bot', 'Chrome', '1.0.0'],
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 60000,
+        keepAliveIntervalMs: 25000,
+    });
+
+    waSocket.ev.on('creds.update', saveCreds);
+
+    waSocket.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) {
+            waQR = qr;
+            waReady = false;
+            console.log('📱 QR listo — escanea desde /admin');
+        }
+        if (connection === 'close') {
+            waReady = false; waQR = null; waNumber = null;
+            const code = lastDisconnect?.error?.output?.statusCode;
+            console.log('⚠️ Desconectado, código:', code);
+            if (code !== DisconnectReason.loggedOut) {
+                console.log('🔄 Reconectando en 5s...');
+                setTimeout(startBot, 5000);
+            }
+        }
+        if (connection === 'open') {
+            waReady = true; waQR = null;
+            waNumber = waSocket.user?.id || null;
+            console.log('🤖 Bot conectado:', waNumber);
         }
     });
-}, 5000);
+
+    waSocket.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+        for (const msg of messages) {
+            if (msg.key.fromMe) continue;
+            if (!msg.message) continue;
+            const jid = msg.key.remoteJid;
+            if (jid.endsWith('@g.us')) continue;
+            const body =
+                msg.message?.conversation ||
+                msg.message?.extendedTextMessage?.text ||
+                msg.message?.imageMessage?.caption ||
+                msg.message?.videoMessage?.caption || '';
+            const hasMedia = !!(msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.documentMessage);
+            const mediaType = msg.message?.imageMessage ? 'image' : 'other';
+            await handleMessage(jid, body, hasMedia, mediaType);
+        }
+    });
+}
+
+// ── Montar admin ──
+app.use('/admin', require('./admin'));
+app.listen(PORT, () => console.log(`🌐 Servidor web corriendo en puerto ${PORT}`));
+
+console.log('🚀 Iniciando bot con Baileys (sin Chrome)...');
+startBot().catch(err => console.error('❌ Error iniciando bot:', err));

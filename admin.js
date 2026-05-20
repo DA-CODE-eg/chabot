@@ -3,13 +3,14 @@ const multer  = require('multer');
 const fs      = require('fs');
 const path    = require('path');
 const crypto  = require('crypto');
+const QRCode  = require('qrcode');
 
 const router = express.Router();
 
-const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASS = process.env.ADMIN_PASS || 'legalsegura2024';
+const ADMIN_USER    = process.env.ADMIN_USER    || 'admin';
+const ADMIN_PASS    = process.env.ADMIN_PASS    || 'legalsegura2024';
 const COOKIE_SECRET = process.env.COOKIE_SECRET || 'legal2024ultrasecreto';
-const TOKEN_COOKIE = "lsadmin";
+const TOKEN_COOKIE  = "lsadmin";
 
 const CONFIG_PATH  = path.join(__dirname, 'media-config.json');
 const VIDEOS_DIR   = path.join(__dirname, 'videos');
@@ -30,7 +31,6 @@ const uploadManual = multer({ storage: storageFor('manual') });
 router.use(express.json());
 router.use(express.urlencoded({ extended: true }));
 
-// Middleware de auth por cookie, no Basic Auth
 function checkSession(req, res, next) {
     const tok = req.cookies?.[TOKEN_COOKIE];
     if (!tok) return res.redirect('/login.html');
@@ -42,25 +42,21 @@ function checkSession(req, res, next) {
     } catch { return res.redirect('/login.html'); }
 }
 
-// Login API
 router.post('/api/login', (req, res) => {
     const {user, pass} = req.body||{};
     if (user === ADMIN_USER && pass === ADMIN_PASS) {
         const hash = crypto.createHmac('sha256', COOKIE_SECRET).update(user+pass).digest('hex');
-        res.cookie(TOKEN_COOKIE, Buffer.from(user+"|"+hash).toString('base64'), {httpOnly:true, maxAge:1000*3600*24*7, path:'/'}).send("ok");
+        res.cookie(TOKEN_COOKIE, Buffer.from(user+"|"+hash).toString('base64'),
+            {httpOnly:true, maxAge:1000*3600*24*7, path:'/'}).send("ok");
     } else res.status(401).send("fail");
 });
 
-// Logout API
 router.post('/api/logout', (req, res) => {
     res.clearCookie(TOKEN_COOKIE, {path:'/'});
     res.send("logout");
 });
 
-// Sirve el panel si está logueado
 router.get('/', checkSession, (req, res) => res.sendFile(path.join(__dirname,'admin.html')));
-
-// El resto de rutas API protegidas
 router.use(checkSession);
 
 function leerConfig()     { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); }
@@ -149,83 +145,31 @@ router.delete('/api/manual/:productoId/:index', (req, res) => {
     res.json({ ok: true, msg: `Manual "${eliminado[0].nombre}" eliminado` });
 });
 
-// --- Vinculación WhatsApp --- //
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const QRCode = require('qrcode');
+// ── WhatsApp via Baileys (global.waState desde index.js) ──
 
-let qrData = null;
-let waReady = false;
-let waNumber = null;
-
-const client = new Client({
-    authStrategy: new LocalAuth({
-        clientId: process.env.SESSION_NAME || 'default',
-        dataPath: './.wwebjs_auth'
-    }),
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage'
-        ]
-    }
-});
-
-// Evento: QR generado
-client.on('qr', qr => {
-    qrData = qr;
-    waReady = false;
-});
-
-// Evento: Autenticado
-client.on('ready', async () => {
-    waReady = true;
-    qrData = null;
-    waNumber = (await client.getMe())?.id?._serialized || null;
-});
-
-// Evento: Desconectado
-client.on('disconnected', () => {
-    waReady = false;
-    waNumber = null;
-    qrData = null;
-});
-
-client.initialize();
-
-// --- API para el Panel --- //
-
-// Estado de vinculación
 router.get('/api/wa/status', (req, res) => {
-    res.json({
-        ready: waReady,
-        qr: !!qrData,
-        number: waNumber
-    });
+    const wa = global.waState || {};
+    res.json({ ready: wa.ready || false, qr: !!(wa.qr), number: wa.number || null });
 });
 
-// Obtener QR como imagen
 router.get('/api/wa/qr', async (req, res) => {
-    if (!qrData) return res.status(404).json({ ok: false, msg: "No hay QR disponible." });
+    const wa = global.waState || {};
+    if (!wa.qr) return res.status(404).json({ ok: false, msg: "No hay QR disponible." });
     try {
-        const svg = await QRCode.toString(qrData, { type: 'svg' });
+        const svg = await QRCode.toString(wa.qr, { type: 'svg' });
         res.type('svg').send(svg);
     } catch (e) {
         res.status(500).json({ ok: false, msg: 'Error generando QR.' });
     }
 });
 
-// Desvincular/cerrar sesión
 router.post('/api/wa/logout', async (req, res) => {
     try {
-        await client.logout();
-        waReady = false;
-        qrData = null;
-        waNumber = null;
-        res.json({ ok: true, msg: "Sesión cerrada. Se generará un nuevo QR." });
+        const wa = global.waState || {};
+        if (wa.logout) await wa.logout();
+        res.json({ ok: true, msg: "Sesión cerrada. Se generará un nuevo QR en breve." });
     } catch(e) {
-        res.status(500).json({ ok: false, msg: "Error cerrando sesión." });
+        res.status(500).json({ ok: false, msg: "Error cerrando sesión: " + e.message });
     }
 });
 
