@@ -2,7 +2,7 @@ console.log("Servidor Node funcionando");
 
 require('dotenv').config();
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const fs = require('fs');
 const path = require('path');
@@ -344,12 +344,15 @@ async function startBot() {
     }
 
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+    const { version } = await fetchLatestBaileysVersion();
+    console.log('📦 Versión WA Web:', version.join('.'));
 
     waSocket = makeWASocket({
         auth: state,
+        version,
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: ['Legal Segura Bot', 'Safari', '16.0'],
+        browser: ['Legal Segura Bot', 'Chrome', '120.0.0'],
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 60000,
         keepAliveIntervalMs: 30000,
