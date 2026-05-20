@@ -363,6 +363,7 @@ async function startBot() {
         global._forzarPairing = false;
         setTimeout(async () => {
             try {
+                if (!waSocket) { console.log('❌ Socket muerto, no se puede pedir código'); return; }
                 console.log('📲 Solicitando pairing code para:', waPairingNumber);
                 const code = await waSocket.requestPairingCode(waPairingNumber);
                 waPairingCode = code?.match(/.{1,4}/g)?.join('-') || code;
@@ -432,3 +433,6 @@ app.listen(PORT, () => console.log(`🌐 Servidor web corriendo en puerto ${PORT
 
 console.log('🚀 Iniciando bot con Baileys (sin Chrome)...');
 startBot().catch(err => console.error('❌ Error iniciando bot:', err));
+
+process.on('uncaughtException', err => console.error('❌ uncaughtException:', err.message));
+process.on('unhandledRejection', err => console.error('❌ unhandledRejection:', err?.message || err));
