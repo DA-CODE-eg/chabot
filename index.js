@@ -364,7 +364,7 @@ async function startBot() {
     waSocket.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
-            if (waPairingNumber) {
+            if (waPairingNumber && !waPairingCode) {
                 try {
                     console.log('📲 Solicitando pairing code para:', waPairingNumber);
                     const code = await waSocket.requestPairingCode(waPairingNumber);
@@ -374,7 +374,7 @@ async function startBot() {
                     console.error('❌ Error pidiendo código:', e.message);
                     waPairingCode = 'ERROR: ' + e.message;
                 }
-            } else {
+            } else if (!waPairingNumber) {
                 waQR = qr;
             }
         }
