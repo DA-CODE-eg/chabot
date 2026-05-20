@@ -361,18 +361,16 @@ async function startBot() {
     // ── Pairing code inmediato (no esperar evento qr) ──
     if (waPairingNumber && global._forzarPairing) {
         global._forzarPairing = false;
-        setTimeout(async () => {
-            try {
-                if (!waSocket) { console.log('❌ Socket muerto, no se puede pedir código'); return; }
-                console.log('📲 Solicitando pairing code para:', waPairingNumber);
-                const code = await waSocket.requestPairingCode(waPairingNumber);
+        console.log('📲 Solicitando pairing code para:', waPairingNumber);
+        waSocket.requestPairingCode(waPairingNumber)
+            .then(code => {
                 waPairingCode = code?.match(/.{1,4}/g)?.join('-') || code;
                 console.log('✅ Código listo:', waPairingCode);
-            } catch(e) {
+            })
+            .catch(e => {
                 console.error('❌ Error pidiendo código:', e.message);
                 waPairingCode = 'ERROR: ' + e.message;
-            }
-        }, 2000);
+            });
     }
 
     waSocket.ev.on('connection.update', async (update) => {
